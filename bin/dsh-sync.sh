@@ -3,7 +3,7 @@
 # Never leaves the service on a broken build: failures keep `current` as-is.
 set -euo pipefail
 
-OPS="$HOME/Documents/dsh-ops"
+OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM="$OPS/harness/upstream"
 BUILDS="$OPS/harness/builds"
 CURRENT="$OPS/harness/current"
@@ -69,10 +69,34 @@ fi
 [ -n "$TARGET" ] || { echo "dsh-sync: no tag found on channel $CHANNEL"; exit 1; }
 echo "dsh-sync: channel=$CHANNEL target=$TARGET"
 
+# Refresh units and the profile layer first, so the smoke test below boots the
+# same composition the service will run. `assets: changed=<n>` says whether the
+# machine itself moved and a restart is therefore warranted.
+if [ "$DRY_RUN" = 1 ]; then
+  ASSETS="$("$OPS/bin/dsh-install-assets.sh" --dry-run)"
+else
+  ASSETS="$("$OPS/bin/dsh-install-assets.sh")"
+fi
+printf '%s\n' "$ASSETS"
+case "$ASSETS" in
+  *"assets: changed=0"*) ASSETS_CHANGED=0 ;;
+  *) ASSETS_CHANGED=1 ;;
+esac
+
 DEPLOYED=""
 [ -f "$REF_FILE" ] && DEPLOYED="$(cat "$REF_FILE")"
 if [ "$TARGET" = "$DEPLOYED" ] && [ -L "$CURRENT" ]; then
-  echo "dsh-sync: already on $TARGET, nothing to do"
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "dsh-sync: already on $TARGET (dry-run)"
+    exit 0
+  fi
+  if [ "$ASSETS_CHANGED" = 0 ]; then
+    echo "dsh-sync: already on $TARGET, nothing to do"
+    exit 0
+  fi
+  echo "dsh-sync: already on $TARGET, restarting for refreshed units/profile layer"
+  systemctl --user daemon-reload
+  systemctl --user restart dsh-web.service dsh-proxy.service
   exit 0
 fi
 
@@ -114,14 +138,13 @@ ln -sfn "$BUILD_DIR" "$CURRENT"
 printf '%s' "$TARGET" > "$REF_FILE"
 echo "dsh-sync: deployed $TARGET"
 
-# Refresh units from this repo so the service tracks the repo (source ExecStart).
-for u in dsh-web.service dsh-proxy.service dsh-update.service dsh-update.timer; do
-  cp "$OPS/systemd/$u" ~/.config/systemd/user/$u
-done
 systemctl --user daemon-reload
 
 if systemctl --user restart dsh-web.service; then
   systemctl --user is-active dsh-web.service
+  # The forwarder owns the tailnet socket; restart it so it rebinds cleanly
+  # against the restarted harness.
+  systemctl --user restart dsh-proxy.service || echo "dsh-sync: WARNING: dsh-proxy restart failed"
   echo "dsh-sync: dsh-web restarted on $TARGET"
 else
   echo "dsh-sync: WARNING: restart failed"

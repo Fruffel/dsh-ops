@@ -1,12 +1,17 @@
 [Unit]
-Description=DeepSeek Harness Web UI from source (dsh web, localhost-only)
+Description=DeepSeek Harness Web UI from source (dsh web, loopback bind)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/Documents/dsh-ops/harness/current
+WorkingDirectory=@@OPS@@/harness/current
 Environment=PATH=%h/.local/share/pnpm/bin:%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# The harness binds loopback only; dsh-proxy publishes it on the tailnet.
+# --trusted-host names the authorities the /api Host/Origin fence accepts --
+# the only place that list lives. The operator-surface plugin reads the same
+# list back out of the running host (ctx.webRuntime.trustedHosts), so adding an
+# authority here is the whole change.
 ExecStart=%h/.local/share/pnpm/bin/pnpm dsh web --no-open --host 127.0.0.1 --port 3080 --trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net --trusted-host 100.93.30.88
 Restart=always
 RestartSec=5

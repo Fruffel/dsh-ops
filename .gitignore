@@ -3,3 +3,6 @@ harness/upstream/
 harness/builds/
 harness/current
 harness/current-ref
+
+# Local scratch (ssh helper, one-off probes): never committed.
+scratch/

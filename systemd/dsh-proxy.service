@@ -1,13 +1,15 @@
 [Unit]
-Description=DSH Tailscale forwarder (tailnet :3080 -> 127.0.0.1:3080)
+Description=DSH tailnet entry (tailnet :3080 -> 127.0.0.1:3080 raw TCP)
 After=dsh-web.service network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/Documents/dsh-ops
+WorkingDirectory=@@OPS@@
 Environment=PATH=%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=%h/.local/node/bin/node %h/Documents/dsh-ops/proxy/tailscale-proxy.mjs
+# Raw TCP: Host, Origin, cookies and WebSockets cross untouched, so the
+# harness sees the authority the browser used and its fence decides on it.
+ExecStart=%h/.local/node/bin/node @@OPS@@/proxy/tailscale-proxy.mjs
 Restart=always
 RestartSec=5
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Bootstrap kamer-ts for dsh-ops: pnpm, units, timer, aliases.
-# Safe to re-run. Does not touch DSH_HOME (~/.dsh) or the running DSH.
+# Bootstrap a machine for dsh-ops: pnpm, user units, timer, aliases, and the
+# web profile layer (operator-surface plugin + cordis.patch.yml).
+# Safe to re-run. Does not touch DSH_HOME data beyond that layer, and never
+# touches the running DSH.
 set -euo pipefail
-OPS="$HOME/Documents/dsh-ops"
+
+OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$HOME/.local/node/bin:$PATH"
 
 command -v node >/dev/null || { echo "install: node not found at ~/.local/node/bin"; exit 1; }
@@ -22,32 +25,31 @@ fi
 export PATH="$HOME/.local/share/pnpm/bin:$PATH"
 pnpm -v
 
+command -v tailscale >/dev/null || echo "install: WARNING no tailscale on PATH; dsh-proxy and dsh-go need it"
+
 mkdir -p ~/.config/systemd/user
 chmod +x "$OPS/bin/"*.sh
 
-# Web profile user layer (reachability + cookie lifetime). Never overwrite.
-if [ ! -f ~/.dsh/profiles/web/cordis.patch.yml ]; then
-  mkdir -p ~/.dsh/profiles/web
-  cp "$OPS/harness/cordis.patch.web.yml" ~/.dsh/profiles/web/cordis.patch.yml
-  echo "install: installed default web profile patch layer"
-fi
-for u in dsh-web.service dsh-proxy.service dsh-go.service dsh-update.service dsh-update.timer; do
-  cp "$OPS/systemd/$u" ~/.config/systemd/user/$u
-done
+# Units (rendered with this checkout's path) + the web profile layer.
+"$OPS/bin/dsh-install-assets.sh"
+
 systemctl --user daemon-reload
-systemctl --user enable dsh-web.service dsh-go.service dsh-update.timer
-systemctl --user start dsh-update.timer dsh-go.service
+systemctl --user enable dsh-web.service dsh-go.service dsh-proxy.service dsh-update.timer
+# dsh-proxy binds the tailnet address, so it may fail until dsh-web is on
+# loopback; its Restart=always converges on its own.
+systemctl --user start dsh-update.timer dsh-proxy.service dsh-go.service
 
 grep -q 'dsh-ops helpers' ~/.bashrc || cat >> ~/.bashrc <<'BLOCK'
 
 # dsh-ops helpers
 export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/node/bin:$PATH"
-alias dsh-update="$HOME/Documents/dsh-ops/bin/dsh-sync.sh"
-alias dsh-url="$HOME/Documents/dsh-ops/bin/dsh-url.sh"
+BLOCK
+# Rewrite the three aliases to this checkout on every run.
+sed -i '/^alias dsh-\(update\|url\|logs\)=/d' ~/.bashrc
+cat >> ~/.bashrc <<BLOCK
+alias dsh-update="$OPS/bin/dsh-sync.sh"
+alias dsh-url="$OPS/bin/dsh-url.sh"
 alias dsh-logs='journalctl --user -u dsh-web -u dsh-proxy -f'
 BLOCK
 
-# Retire the previous npm-era aliases if present.
-sed -i 's|^alias dsh-update=.*|alias dsh-update="$HOME/Documents/dsh-ops/bin/dsh-sync.sh"|; s|^alias dsh-url=.*|alias dsh-url="$HOME/Documents/dsh-ops/bin/dsh-url.sh"|' ~/.bashrc
-
-echo "install: done. Next: bin/dsh-sync.sh --dry-run"
+echo "install: done. Next: $OPS/bin/dsh-sync.sh --dry-run"

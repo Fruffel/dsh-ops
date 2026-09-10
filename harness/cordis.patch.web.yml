@@ -1,16 +1,27 @@
-# Web profile user layer: tailnet/LAN reachability + long-lived cookie.
-# Managed by dsh-ops (install.sh installs it when missing).
-# A top-level YAML array of loader patch entries; `!!js` expressions allowed.
+# dsh-ops:managed — dsh-ops owns this file and replaces it in place (keeping a
+# .bak) while this marker line is present. Delete the marker to take ownership.
+#
+# Web profile user layer for dsh-ops, installed at
+# ~/.dsh/profiles/web/cordis.patch.yml. The loader applies it after every
+# bundle layer of the `web` profile, and the profile live-reloads it on edit.
+#
+# Read the design notes in the repo README before changing these rows.
+
+# 1. The /api browser-trust fence and the browser cookie lifetime.
+#    A patch replaces the targeted row's WHOLE config, so `trustedHosts` is
+#    restated with the bundle's own expression (bind-derived authorities plus
+#    every --trusted-host of this invocation). Omitting it would fall back to
+#    the schema default [] and refuse every tailnet request with 403.
 - id: connection
   config:
     trustedHosts: !!js ctx.webRuntime.trustedHosts
     cookieMaxAgeDays: 365
-- id: webserver
-  name: '@deepseek-ai/dsh-host-webserver'
-  inject: [webStartup]
-  config:
-    host: '0.0.0.0'
-    port: !!js ctx.webStartup.port ?? 3080
-    compression: gzip
-    compressionLevel: 1
-    compressionThresholdBytes: 1024
+
+# 2. The operator-surface plugin: pages served on a fence-trusted authority
+#    declare themselves the operator's own surface, so host-backed settings
+#    (Models, API keys, appearance) work over the tailnet instead of degrading
+#    to process-local memory. The plugin reads its authorities from the live
+#    webRuntime service; `./` is resolved relative to this patch file.
+- insert:
+    - id: dsh-ops-operator-surface
+      name: ./dsh-ops-operator-surface.mjs
