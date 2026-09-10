@@ -1,0 +1,16 @@
+# Web profile user layer: tailnet/LAN reachability + long-lived cookie.
+# Managed by dsh-ops (install.sh installs it when missing).
+# A top-level YAML array of loader patch entries; `!!js` expressions allowed.
+- id: connection
+  config:
+    trustedHosts: !!js ctx.webRuntime.trustedHosts
+    cookieMaxAgeDays: 365
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  inject: [webStartup]
+  config:
+    host: '0.0.0.0'
+    port: !!js ctx.webStartup.port ?? 3080
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024

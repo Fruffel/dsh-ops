@@ -23,6 +23,14 @@ export PATH="$HOME/.local/share/pnpm/bin:$PATH"
 pnpm -v
 
 mkdir -p ~/.config/systemd/user
+chmod +x "$OPS/bin/"*.sh
+
+# Web profile user layer (reachability + cookie lifetime). Never overwrite.
+if [ ! -f ~/.dsh/profiles/web/cordis.patch.yml ]; then
+  mkdir -p ~/.dsh/profiles/web
+  cp "$OPS/harness/cordis.patch.web.yml" ~/.dsh/profiles/web/cordis.patch.yml
+  echo "install: installed default web profile patch layer"
+fi
 for u in dsh-web.service dsh-proxy.service dsh-update.service dsh-update.timer; do
   cp "$OPS/systemd/$u" ~/.config/systemd/user/$u
 done

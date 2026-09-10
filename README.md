@@ -18,11 +18,16 @@ Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-a
 
 ## Design notes
 
-- DSH only binds `127.0.0.1` (`0.0.0.0` is refused at the CLI; other IPs are
-  rejected by the webserver schema), so tailnet reachability comes from the
-  proxy, which binds **only** the Tailscale IPv4 — never the LAN.
-- `--trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net --trusted-host <tail-ip>`
-  lets the `/api` browser-trust fence accept tailnet authorities.
+- DSH only binds `127.0.0.1` via its CLI (`--host 0.0.0.0` is refused there),
+  so tailnet reachability comes from the web profile's user patch layer
+  (`harness/cordis.patch.web.yml` → `~/.dsh/profiles/web/cordis.patch.yml`),
+  which restates the `webserver` row with `host: '0.0.0.0'`. Bound this way
+  the harness also auto-trusts its own IP literals (LAN + tailnet) for `/api`.
+  Token+cookie auth still guards everything.
+- `--trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net` covers
+  hostname (non-IP) authorities through the `/api` browser-trust fence.
+- `proxy/tailscale-proxy.mjs` is a kept fallback (loopback DSH + forwarder
+  bound to the tailnet IP only). Not used by default.
 - The `?token=` URL is needed **once**; it mints a cookie (patched to 365 days
   in `~/.dsh/profiles/web/cordis.patch.yml`) that survives restarts and updates.
 - `DSH_HOME` (`~/.dsh`: profiles, credentials, sessions) is untouched by syncs.
