@@ -16,7 +16,6 @@ Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-a
 | `bin/dsh-sync.sh` | Smart updater: newest tag on a channel → build → smoke test → swap, or keep last good |
 | `bin/dsh-go.mjs` | Token-free entry: tailnet `:3081` → 302 to the current `?token=` URL |
 | `bin/dsh-check-gui.mjs` | Acceptance check: drives real Chrome from the tailnet into Settings → Models |
-| `bin/dsh-set-key.sh` | Install / inspect / remove the host's model-provider credential (`~/.dsh/.env`) |
 | `bin/dsh-url.sh` | Prints the current `?token=` URLs (local, tailnet IP, MagicDNS) |
 | `proxy/tailscale-proxy.mjs` | User-space TCP forwarder: tailnet `:3080` → `127.0.0.1:3080` |
 | `systemd/` | User units: `dsh-web`, `dsh-proxy`, `dsh-go`, `dsh-update` (+ daily 03:00 timer) |
@@ -99,40 +98,6 @@ is loopback-only again. The zero-deviation alternative is to reach the GUI
 through an SSH local forward and browse `http://localhost:3080`, which upstream
 documents for SSH sessions.
 
-### The first-run "Add an API key" step
-
-That dialog is not about the launch token. It is the DeepSeek **platform** API
-key — the operator's own long-lived credential — and it appears while no
-provider can serve requests (`onboardingReadiness` projects the same
-provider/settings/credential join the Models page uses, and the step renders
-while a session is blank). It is **not rotated**: dsh stores it on the host and
-keeps using it across restarts, updates and browsers. The rotating thing is the
-`?token=` launch URL, which `dsh-go` absorbs for you. "Configure later" is
-React state, so dismissing it only lasts until the page reloads — the durable
-way to end the step is to give the host a usable credential.
-
-`@deepseek-ai/dsh-credentials-local` resolves a reference in this order:
-
-| Rank | Source | Notes |
-| --- | --- | --- |
-| 1 | inherited process environment | read-only to dsh; nothing can overwrite it |
-| 2 | `$DSH_HOME/.credentials.yaml` `refs:` | the store the Models page writes |
-| 3 | `$DSH_HOME/.env` | what `bin/dsh-set-key.sh` writes — mode 600 |
-| 4 | `<invocation cwd>/.env` | a clone's own file |
-
-So a key can be installed three ways, all durable:
-
-- paste it once into the dialog at `kamer:3081` (now that the Models page
-  works over the tailnet) — it lands as rank 2;
-- `bin/dsh-set-key.sh` on the host — hidden prompt, writes rank 3 and restarts
-  `dsh-web`; `--show` reports which rank currently answers, `--unset` removes it;
-- export `DEEPSEEK_API_KEY` in the service environment — rank 1.
-
-Rank 3 is a fallback *below* the store, so a key pasted later in the UI still
-wins over it. Verified on a throwaway home: with the variable in
-`~/.dsh/.env` the first-run step does not render at all, without it the dialog
-appears exactly as it did on `kamer`.
-
 ### The profile layer is a managed file
 
 `~/.dsh/profiles/web/cordis.patch.yml` and the plugin beside it are installed by
@@ -190,10 +155,6 @@ dsh-url                    # current token URLs
 dsh-logs                   # follow dsh-web + dsh-proxy
 bin/dsh-install-assets.sh --dry-run   # show unit/profile-layer drift
 bin/dsh-check-gui.mjs      # browser check: tailnet -> Models page renders
-bin/dsh-check-gui.mjs --expect-provider   # ... and requires a configured key
-bin/dsh-set-key.sh --show  # which source answers DEEPSEEK_API_KEY
-bin/dsh-set-key.sh         # install the provider key (hidden prompt), restart
-bin/dsh-set-key.sh --unset # remove the entry this repo manages
 ```
 
 `bin/dsh-check-gui.mjs [entry-url]` drives headless Chrome from whatever
@@ -215,4 +176,3 @@ bin/dsh-check-gui.mjs http://kamer.tail39c8ca.ts.net:3081/
 | `401 unauthorized` / login loop | You changed authority (host/port) and need the `?token=` URL once for that one — use `dsh-go` on `:3081` |
 | "settings are unavailable in this browser" | The operator-surface plugin is not mounted, or you reached the page on an authority outside `--trusted-host`. Check `systemctl --user status dsh-web` and `bin/dsh-install-assets.sh --dry-run` |
 | Tailnet `:3080` refuses connections | `dsh-proxy` is down or DSH took the socket: `systemctl --user status dsh-proxy dsh-web` (the proxy retries every 5s) |
-| "Add an API key to get started" on every load | No provider can serve requests on that host: `bin/dsh-set-key.sh --show` (see [the first-run step](#the-first-run-add-an-api-key-step)) |
