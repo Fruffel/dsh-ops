@@ -8,11 +8,14 @@ juggling, settings and the Models page work remotely, and it updates itself.
 ## Quickstart
 
 ```sh
-git clone https://github.com/Fruffel/dsh-ops ~/Documents/dsh-ops
-cd ~/Documents/dsh-ops
-./install.sh          # node/pnpm check, services, aliases, config
-bin/dsh-sync.sh       # first build + deploy (minutes)
+git clone https://github.com/Fruffel/dsh-ops
+cd dsh-ops
+./install.sh          # pnpm, services, timer, profile layer, config
+./bin/dsh-sync.sh     # first build + deploy (minutes)
 ```
+
+The checkout can live anywhere — `install.sh` renders its own path into the
+units. Nothing is installed into your shell: it is just a service.
 
 Then bookmark `http://<this-host>:3081/`. That is it.
 
@@ -38,17 +41,21 @@ DSH_TRUSTED_HOSTS="dsh.example.com work-laptop.lan"
 
 ## Commands
 
-These are installed as real executables in `~/.local/bin` (aliases would only
-exist in interactive bash), so scripts and other shells resolve them too:
+Run these from the checkout. `npm run <name>` and `./bin/<script>` are the same
+thing — the npm scripts are just short names (pnpm works too).
 
-| Command | What |
-| --- | --- |
-| `dsh-update` | Update now (build newest tag, swap, restart); `--dry-run`, `--ref <tag>` to pin |
-| `dsh-url` | Print the current login URLs for this host |
-| `dsh-logs` | Follow the services |
-| `bin/dsh-check-gui.mjs <url>` | End-to-end check in a real browser: does the GUI load and the Models page render? |
-| `bin/dsh-install-assets.sh` | Re-render units + profile layer from this checkout (and `dsh-ops.conf`) |
-| `./uninstall.sh` | Remove services (keep data); `--purge` removes the checkout too |
+| npm run | Direct | What |
+| --- | --- | --- |
+| `update` | `./bin/dsh-sync.sh` | Update now (newest tag → build → smoke test → swap). Add `-- --dry-run`, `-- --channel stable`, `-- --ref <tag>` to pin |
+| `url` | `./bin/dsh-url.sh` | Print the current login URLs for this host |
+| `logs` | `./bin/dsh-logs.sh` | Follow the services |
+| `check` | `./bin/dsh-check-gui.mjs` | Browser check: `npm run check -- http://<host>:3081/` |
+| `assets` | `./bin/dsh-install-assets.sh` | Re-render units + profile layer from this checkout and `dsh-ops.conf` |
+| `bootstrap` | `./install.sh` | Re-run the machine setup |
+| `uninstall` | `./uninstall.sh` | Remove the service (keeps data); `-- --purge` removes the checkout too |
+
+The daily update runs on its own (`dsh-update.timer`, 03:00), so this is only
+for doing it by hand.
 
 ## Configuration
 
@@ -69,7 +76,7 @@ exist in interactive bash), so scripts and other shells resolve them too:
 | Login loop / `401` | You switched address; open `http://<that-address>:3081/` once to get a cookie for it |
 | "Add an API key to get started" | Normal first-run step: paste your DeepSeek key once, or set `DEEPSEEK_API_KEY` for the service |
 | Nothing on `:3081` yet | It reads the token from the harness journal — give it a few seconds after a restart |
-| Update went wrong | `dsh-update --dry-run`, then `dsh-update --ref <previous-tag>`; the last good build kept running |
+| Update went wrong | `npm run update -- --dry-run`, then `npm run update -- --ref <previous-tag>`; the last good build kept running |
 
 ## Files
 

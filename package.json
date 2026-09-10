@@ -1,0 +1,15 @@
+{
+  "name": "dsh-ops",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Run the DeepSeek Harness from source and reach it from anywhere.",
+  "scripts": {
+    "bootstrap": "./install.sh",
+    "update": "./bin/dsh-sync.sh",
+    "assets": "./bin/dsh-install-assets.sh",
+    "url": "./bin/dsh-url.sh",
+    "logs": "./bin/dsh-logs.sh",
+    "check": "node bin/dsh-check-gui.mjs",
+    "uninstall": "./uninstall.sh"
+  }
+}
