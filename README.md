@@ -32,6 +32,21 @@ Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-a
   in `~/.dsh/profiles/web/cordis.patch.yml`) that survives restarts and updates.
 - `DSH_HOME` (`~/.dsh`: profiles, credentials, sessions) is untouched by syncs.
 
+## Setup / uninstall
+
+Fresh machine: `./install.sh` installs pnpm, the web profile patch layer,
+the user units (+ enables `dsh-web`, `dsh-go`, the 03:00 timer) and the shell
+aliases — then `bin/dsh-sync.sh` builds and deploys. Full flow:
+
+```sh
+./install.sh
+bin/dsh-sync.sh          # first build + deploy (takes minutes)
+```
+
+Remove: `./uninstall.sh` stops/disables services, removes units and aliases,
+keeps repo + data. `./uninstall.sh --purge` also removes the repo checkout,
+harness builds and our profile patch. Both support `--dry-run`.
+
 ## Connect (no token handling)
 
 Bookmark `http://kamer:3081/` (or `http://100.93.30.88:3081/`). `dsh-go`
