@@ -53,3 +53,5 @@ alias dsh-logs='journalctl --user -u dsh-web -u dsh-proxy -f'
 BLOCK
 
 echo "install: done. Next: $OPS/bin/dsh-sync.sh --dry-run"
+echo "install: tip    : $OPS/bin/dsh-set-key.sh installs the model-provider key"
+echo "install:          (the GUI's first-run step asks for it once per host)"

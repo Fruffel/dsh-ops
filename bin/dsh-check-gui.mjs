@@ -9,9 +9,11 @@
  * browser profile. Chrome is driven over CDP with Node's built-in WebSocket, so
  * there are nothing to install.
  *
- * usage: dsh-check-gui.mjs [entry-url] [--keep-open]
- *   entry-url   defaults to http://kamer:3081/ (dsh-go's token-free entry)
- *   CHROME      overrides the browser executable
+ * usage: dsh-check-gui.mjs [entry-url] [--expect-provider] [--keep-open]
+ *   entry-url          defaults to http://kamer:3081/ (dsh-go's token-free entry)
+ *   --expect-provider  also fail when the first-run "Add an API key" step is
+ *                      showing, i.e. require a configured model provider
+ *   CHROME             overrides the browser executable
  *
  * exit 0 when the Models page rendered its provider directory on the entry
  * authority; exit 1 otherwise (with the panel text printed).
@@ -35,6 +37,7 @@ const CANDIDATES = [
 
 const args = process.argv.slice(2)
 const keepOpen = args.includes('--keep-open')
+const expectProvider = args.includes('--expect-provider')
 const entry = args.find((value) => !value.startsWith('--')) ?? 'http://kamer:3081/'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -157,17 +160,27 @@ try {
     entry,
     finalUrl: await evaluate('location.href'),
     operatorSurface: await evaluate('globalThis.__DSH_TRANSPORT__?.ownsHost === true'),
+    // The first-run step only renders while no provider can serve requests, so
+    // its absence is the durable "a key is configured" signal.
+    onboardingPrompt: await evaluate(
+      `/Add an API key to get started/.test((document.querySelector('[role="dialog"]') ?? document.body).innerText)`,
+    ),
   }
-  if (!await evaluate(CLICK('Settings'))) throw new Error('no Settings trigger on the page')
-  await sleep(1200)
-  if (!await evaluate(CLICK('Models'))) throw new Error('no Models entry in the settings navigation')
-  await sleep(2500)
-
-  report.panel = await evaluate(`(() => {
-    const panel = document.querySelector('[role="dialog"]') ?? document.body
-    return panel.innerText.slice(0, 800)
-  })()`)
-  report.downgraded = /settings are unavailable|Loading the provider directory failed/.test(report.panel)
+  // The first-run step owns the dialog while it shows, so the walk is recorded
+  // rather than thrown: the report above already says whether it was up.
+  try {
+    if (!await evaluate(CLICK('Settings'))) throw new Error('no Settings trigger on the page')
+    await sleep(1200)
+    if (!await evaluate(CLICK('Models'))) throw new Error('no Models entry in the settings navigation')
+    await sleep(2500)
+    report.panel = await evaluate(`(() => {
+      const panel = document.querySelector('[role="dialog"]') ?? document.body
+      return panel.innerText.slice(0, 800)
+    })()`)
+    report.downgraded = /settings are unavailable|Loading the provider directory failed/.test(report.panel)
+  } catch (error) {
+    report.settingsWalk = error instanceof Error ? error.message : String(error)
+  }
   report.console = consoleLines.filter((line) => line.includes('operator surface'))
 
   console.log(JSON.stringify(report, null, 2))
@@ -176,6 +189,9 @@ try {
     process.exitCode = 1
   } else if (!report.operatorSurface) {
     console.error('dsh-check-gui: FAIL the page did not receive the operator surface')
+    process.exitCode = 1
+  } else if (expectProvider && report.onboardingPrompt) {
+    console.error('dsh-check-gui: FAIL the first-run API-key step is showing (no usable provider)')
     process.exitCode = 1
   } else {
     console.error('dsh-check-gui: OK the Models page rendered over ' + new URL(report.finalUrl).host)
