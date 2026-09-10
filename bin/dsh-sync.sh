@@ -114,6 +114,12 @@ ln -sfn "$BUILD_DIR" "$CURRENT"
 printf '%s' "$TARGET" > "$REF_FILE"
 echo "dsh-sync: deployed $TARGET"
 
+# Refresh units from this repo so the service tracks the repo (source ExecStart).
+for u in dsh-web.service dsh-proxy.service dsh-update.service dsh-update.timer; do
+  cp "$OPS/systemd/$u" ~/.config/systemd/user/$u
+done
+systemctl --user daemon-reload
+
 if systemctl --user restart dsh-web.service; then
   systemctl --user is-active dsh-web.service
   echo "dsh-sync: dsh-web restarted on $TARGET"
