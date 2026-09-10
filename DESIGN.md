@@ -61,7 +61,7 @@ this on purpose (`.agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-p
 "The Client keeps Host persistence disabled on non-loopback pages"), so it is a
 policy a remote deployment has to answer, not a bug to paper over.
 
-`plugins/dsh-ops-operator-surface.mjs` answers it inside the harness's own plugin
+`plugins/dsh-ops-operator-surface/` answers it inside the harness's own plugin
 system:
 
 * `webserver/index-inject` (dsh-host-webserver) is the documented seam for
@@ -84,13 +84,13 @@ documents for SSH sessions.
 
 ## The profile layer is a managed file
 
-`~/.dsh/profiles/web/cordis.patch.yml` and the plugin beside it are installed by
-`bin/dsh-install-assets.sh`. The patch carries a `dsh-ops:managed` marker: while
-the marker is there dsh-ops refreshes it (keeping a `.bak`); delete the marker and
-the file becomes yours and is never overwritten. `DSH_HOME` data otherwise
-(sessions, credentials, settings) is untouched by syncs.
+`~/.dsh/profiles/web/cordis.patch.yml` and the plugin package beside it are
+installed by `bin/dsh-install-assets.sh`. The patch carries a `dsh-ops:managed`
+marker: while the marker is there dsh-ops refreshes it (keeping a `.bak`); delete
+the marker and the file becomes yours and is never overwritten. `DSH_HOME` data
+otherwise (sessions, credentials, settings) is untouched by syncs.
 
-Three details the layer carries:
+Four details the layer carries:
 
 * A loader patch replaces the targeted row's **whole** config, so the
   `webserver` row restates every key it owns (with `host: '0.0.0.0'`) and the
@@ -107,6 +107,14 @@ Three details the layer carries:
 * `bin/dsh-install-assets.sh` retires units this repo no longer ships (currently
   `dsh-proxy.service`, an earlier user-space forwarder), so a pulled checkout
   stays authoritative over what a machine has installed.
+* The operator-surface plugin is a versioned package
+  (`plugins/dsh-ops-operator-surface/`, name + version) rather than a loose file
+  next to the profile's `package.json`. Official DeepSeek requests inventory
+  every active Loader plugin (`dsh_plugin_packages`); a relative module whose
+  nearest named manifest has no version fails the request with
+  `REQUEST_EXTENSION`. The profile's own `package.json` is named
+  `dsh-profile-web` and has no version, so a loose `./plugin.mjs` beside it
+  poisons every run.
 
 ## Updates
 

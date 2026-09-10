@@ -3,7 +3,7 @@
 # Default: stop/disable services, remove units, drop shell aliases.
 #          Keeps the repo, DSH_HOME (~/.dsh data), and the node/pnpm toolchain.
 # --purge: also removes the repo checkout, harness builds, and the dsh-ops
-#          profile layer (the operator-surface plugin + cordis.patch.yml, only
+#          profile layer (the operator-surface package + cordis.patch.yml, only
 #          when unmodified). Toolchain and ~/.dsh data stay.
 # --dry-run: print what would happen, change nothing.
 set -euo pipefail
@@ -11,7 +11,8 @@ set -euo pipefail
 OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="${DSH_HOME:-$HOME/.dsh}/profiles/web"
 PATCH="$PROFILE_DIR/cordis.patch.yml"
-PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface.mjs"
+PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface"
+LEGACY_PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface.mjs"
 TEMPLATE="$OPS/harness/cordis.patch.web.yml"
 DRY_RUN=0
 PURGE=0
@@ -56,11 +57,13 @@ if [ "$PURGE" = 1 ]; then
   # The patch and the plugin it mounts go together: dropping one without the
   # other leaves a row pointing at a missing module.
   if [ -f "$PATCH" ] && cmp -s "$PATCH" "$TEMPLATE"; then
-    run rm -f "$PATCH" "$PATCH.bak" "$PLUGIN"
+    run rm -rf "$PLUGIN"
+    run rm -f "$PATCH" "$PATCH.bak" "$LEGACY_PLUGIN"
   elif [ -f "$PATCH" ]; then
     echo "uninstall: keeping $PATCH (edited by hand; remove it and $PLUGIN manually)"
-  elif [ -f "$PLUGIN" ]; then
-    run rm -f "$PLUGIN"
+  elif [ -d "$PLUGIN" ] || [ -f "$LEGACY_PLUGIN" ]; then
+    run rm -rf "$PLUGIN"
+    run rm -f "$LEGACY_PLUGIN"
   fi
   run rm -rf "$OPS"
 fi

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Render this checkout into the machine-local dsh-ops assets:
 #   * systemd user units (WorkingDirectory/ExecStart point at THIS checkout)
-#   * the web profile layer: the operator-surface plugin plus the
+#   * the web profile layer: the operator-surface package plus the
 #     cordis.patch.yml that mounts it
 #
 # Ownership rule: a file carrying the `dsh-ops:managed` marker is ours and is
@@ -26,8 +26,9 @@ DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 PROFILE_DIR="$DSH_HOME_DIR/profiles/web"
 PATCH_SRC="$OPS/harness/cordis.patch.web.yml"
 PATCH_DST="$PROFILE_DIR/cordis.patch.yml"
-PLUGIN_SRC="$OPS/plugins/dsh-ops-operator-surface.mjs"
-PLUGIN_DST="$PROFILE_DIR/dsh-ops-operator-surface.mjs"
+PLUGIN_SRC="$OPS/plugins/dsh-ops-operator-surface"
+PLUGIN_DST="$PROFILE_DIR/dsh-ops-operator-surface"
+LEGACY_PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface.mjs"
 MARKER='dsh-ops:managed'
 DRY_RUN=0
 CHANGED=0
@@ -119,25 +120,35 @@ install_units() {
   done
 }
 
-# The profile layer: one plugin file (always ours) plus the patch that mounts it.
+# The profile layer: the operator-surface package (always ours) plus the patch
+# that mounts it. The plugin is a versioned package of its own because official
+# DeepSeek requests inventory every active Loader module, and a relative file
+# whose nearest named package.json has no version fails with REQUEST_EXTENSION.
 install_profile_layer() {
-  mkdir -p "$PROFILE_DIR"
+  mkdir -p "$PROFILE_DIR" "$PLUGIN_DST"
 
-  if [ -f "$PLUGIN_DST" ] && cmp -s "$PLUGIN_SRC" "$PLUGIN_DST"; then
-    echo "profile: operator-surface plugin already current"
-  else
-    if [ "$DRY_RUN" = 1 ]; then
-      echo "+ install $(basename "$PLUGIN_DST")"
-    else
-      cp -f "$PLUGIN_SRC" "$PLUGIN_DST"
-      echo "profile: installed $(basename "$PLUGIN_DST")"
+  plugin_changed=0
+  for file in package.json index.mjs; do
+    if [ -f "$PLUGIN_DST/$file" ] && cmp -s "$PLUGIN_SRC/$file" "$PLUGIN_DST/$file"; then
+      continue
     fi
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "+ install dsh-ops-operator-surface/$file"
+    else
+      cp -f "$PLUGIN_SRC/$file" "$PLUGIN_DST/$file"
+      echo "profile: installed dsh-ops-operator-surface/$file"
+    fi
+    plugin_changed=1
     CHANGED=$((CHANGED + 1))
+  done
+  if [ "$plugin_changed" = 0 ]; then
+    echo "profile: operator-surface plugin already current"
   fi
 
   # A file is ours when it carries the marker. The legacy header is accepted
   # once, so the pre-marker layer this repo shipped upgrades in place; both are
-  # backed up to .bak before the replacement lands.
+  # backed up to .bak before the replacement lands. An operator-owned patch is
+  # left alone, including any leftover loose plugin file it may still mount.
   if [ -f "$PATCH_DST" ] && ! grep -qE "$MARKER|Managed by dsh-ops" "$PATCH_DST"; then
     echo "profile: KEPT $PATCH_DST (no '$MARKER' marker, so it is operator-owned)"
     echo "profile: to adopt the dsh-ops layer, move that file aside and re-run this script"
@@ -145,23 +156,33 @@ install_profile_layer() {
   fi
   if [ -f "$PATCH_DST" ] && cmp -s "$PATCH_SRC" "$PATCH_DST"; then
     echo "profile: cordis.patch.yml already current"
-    return 0
-  fi
-  if [ -f "$PATCH_DST" ]; then
-    if [ "$DRY_RUN" = 1 ]; then
-      echo "+ save $(basename "$PATCH_DST").bak"
-    else
-      cp -f "$PATCH_DST" "$PATCH_DST.bak"
-      echo "profile: previous layer saved as $(basename "$PATCH_DST").bak"
-    fi
-  fi
-  if [ "$DRY_RUN" = 1 ]; then
-    echo "+ install cordis.patch.yml"
   else
-    cp -f "$PATCH_SRC" "$PATCH_DST"
-    echo "profile: installed cordis.patch.yml"
+    if [ -f "$PATCH_DST" ]; then
+      if [ "$DRY_RUN" = 1 ]; then
+        echo "+ save $(basename "$PATCH_DST").bak"
+      else
+        cp -f "$PATCH_DST" "$PATCH_DST.bak"
+        echo "profile: previous layer saved as $(basename "$PATCH_DST").bak"
+      fi
+    fi
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "+ install cordis.patch.yml"
+    else
+      cp -f "$PATCH_SRC" "$PATCH_DST"
+      echo "profile: installed cordis.patch.yml"
+    fi
+    CHANGED=$((CHANGED + 1))
   fi
-  CHANGED=$((CHANGED + 1))
+
+  if [ -f "$LEGACY_PLUGIN" ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "+ retire $(basename "$LEGACY_PLUGIN")"
+    else
+      rm -f "$LEGACY_PLUGIN"
+      echo "profile: retired $(basename "$LEGACY_PLUGIN") (plugin is now a package)"
+    fi
+    CHANGED=$((CHANGED + 1))
+  fi
 }
 
 # Retire first: the harness must be able to take the address a retired unit held.

@@ -1,0 +1,6 @@
+{
+  "name": "dsh-ops-operator-surface",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module"
+}

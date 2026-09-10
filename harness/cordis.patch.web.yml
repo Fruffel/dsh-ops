@@ -55,6 +55,10 @@
 #    (Models, API keys, appearance) work over the tailnet instead of degrading
 #    to process-local memory. The plugin reads its authorities from the live
 #    webRuntime service; `./` is resolved relative to this patch file.
+#    It lives in its own package (name + version) rather than as a loose file
+#    next to the profile's package.json: official DeepSeek requests inventory
+#    every active Loader plugin, and a relative module whose nearest named
+#    manifest has no version fails the request with REQUEST_EXTENSION.
 - insert:
     - id: dsh-ops-operator-surface
-      name: ./dsh-ops-operator-surface.mjs
+      name: ./dsh-ops-operator-surface/index.mjs

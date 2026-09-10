@@ -33,7 +33,7 @@ DSH_TRUSTED_HOSTS="dsh.example.com work-laptop.lan"
 * `:3081` watches the harness for its current login token and redirects you
   through it, so the bookmark keeps working across restarts and updates.
 * Settings, API keys and the Models page work from remote pages too, via one
-  small plugin (`plugins/dsh-ops-operator-surface.mjs`) that extends the client's
+  small plugin (`plugins/dsh-ops-operator-surface/`) that extends the client's
   privileged surface to the authorities you declared.
 * A daily timer builds the newest release tag from source, smoke-tests it, and
   swaps only if it boots — a failure leaves the previous build running.
@@ -76,6 +76,8 @@ for doing it by hand.
 | Login loop / `401` | You switched address; open `http://<that-address>:3081/` once to get a cookie for it |
 | "Add an API key to get started" | Normal first-run step: paste your DeepSeek key once, or set `DEEPSEEK_API_KEY` for the service |
 | Nothing on `:3081` yet | It reads the token from the harness journal — give it a few seconds after a restart |
+| Turn fails with `REQUEST_EXTENSION` | The operator-surface plugin must be a versioned package; re-run `npm run assets` and restart `dsh-web` |
+
 | Update went wrong | `npm run update -- --dry-run`, then `npm run update -- --ref <previous-tag>`; the last good build kept running |
 
 ## Files
@@ -86,7 +88,7 @@ for doing it by hand.
 | `bin/dsh-sync.sh` | The updater (build → smoke test → swap, or keep last good) |
 | `bin/dsh-go.mjs` / `bin/dsh-url.sh` | The `:3081` entry / the URL helper |
 | `bin/dsh-check-gui.mjs` | Browser acceptance check |
-| `plugins/dsh-ops-operator-surface.mjs` | The one DSH plugin this repo ships |
+| `plugins/dsh-ops-operator-surface/` | The one DSH plugin this repo ships |
 | `harness/cordis.patch.web.yml` | The web profile layer it installs |
 | `systemd/` | `dsh-web`, `dsh-go`, `dsh-update` + daily timer |
 | `dsh-ops.conf.example` | Config template |

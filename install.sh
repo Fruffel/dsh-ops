@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bootstrap a machine for dsh-ops: pnpm, the user units (+ daily timer), and the
-# web profile layer (operator-surface plugin + cordis.patch.yml).
+# web profile layer (operator-surface package + cordis.patch.yml).
 #
 # It installs a service, nothing else: no aliases, no commands on PATH, no edits
 # to your shell files. Run the scripts in bin/ directly, or via npm run.
