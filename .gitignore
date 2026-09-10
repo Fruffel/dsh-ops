@@ -1,0 +1,5 @@
+# Machine-local harness artifacts (kamer-ts): never committed.
+harness/upstream/
+harness/builds/
+harness/current
+harness/current-ref
