@@ -1,0 +1,8 @@
+[Unit]
+Description=Sync DeepSeek Harness source to newest tag, build, deploy
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/dsh-ops
+Environment=PATH=%h/.local/share/pnpm:%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=%h/Documents/dsh-ops/bin/dsh-sync.sh --channel rc

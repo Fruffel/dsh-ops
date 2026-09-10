@@ -1,0 +1,15 @@
+[Unit]
+Description=DeepSeek Harness Web UI from source (dsh web, localhost-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/dsh-ops/harness/current
+Environment=PATH=%h/.local/share/pnpm:%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=%h/.local/share/pnpm/pnpm dsh web --no-open --host 127.0.0.1 --port 3080 --trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net --trusted-host 100.93.30.88
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
