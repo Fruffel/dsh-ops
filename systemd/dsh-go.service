@@ -1,0 +1,15 @@
+[Unit]
+Description=DSH token-free entry (tailnet :3081 -> current ?token= URL)
+After=dsh-web.service network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/dsh-ops
+Environment=PATH=%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=%h/.local/node/bin/node %h/Documents/dsh-ops/bin/dsh-go.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

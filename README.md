@@ -32,6 +32,12 @@ Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-a
   in `~/.dsh/profiles/web/cordis.patch.yml`) that survives restarts and updates.
 - `DSH_HOME` (`~/.dsh`: profiles, credentials, sessions) is untouched by syncs.
 
+## Connect (no token handling)
+
+Bookmark `http://kamer:3081/` (or `http://100.93.30.88:3081/`). `dsh-go`
+redirects to the current `?token=` URL, which mints the cookie. The token
+rotates every restart/update, but the bookmark keeps working.
+
 ## Usage
 
 ```sh

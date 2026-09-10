@@ -31,10 +31,12 @@ if [ ! -f ~/.dsh/profiles/web/cordis.patch.yml ]; then
   cp "$OPS/harness/cordis.patch.web.yml" ~/.dsh/profiles/web/cordis.patch.yml
   echo "install: installed default web profile patch layer"
 fi
-for u in dsh-web.service dsh-proxy.service dsh-update.service dsh-update.timer; do
+for u in dsh-web.service dsh-proxy.service dsh-go.service dsh-update.service dsh-update.timer; do
   cp "$OPS/systemd/$u" ~/.config/systemd/user/$u
 done
 systemctl --user daemon-reload
+systemctl --user enable dsh-web.service dsh-go.service dsh-update.timer
+systemctl --user start dsh-update.timer dsh-go.service
 
 grep -q 'dsh-ops helpers' ~/.bashrc || cat >> ~/.bashrc <<'BLOCK'
 
