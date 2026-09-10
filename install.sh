@@ -44,17 +44,22 @@ systemctl --user daemon-reload
 systemctl --user enable dsh-web.service dsh-go.service dsh-update.timer
 systemctl --user start dsh-update.timer dsh-go.service
 
-grep -q 'dsh-ops helpers' ~/.bashrc || cat >> ~/.bashrc <<'BLOCK'
+# Commands as real executables on PATH, not aliases: that way scripts, other
+# shells, and "ssh -t <host> dsh-update" all resolve them. Re-pointed at this
+# checkout on every run.
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$OPS/bin/dsh-sync.sh" "$HOME/.local/bin/dsh-update"
+ln -sfn "$OPS/bin/dsh-url.sh" "$HOME/.local/bin/dsh-url"
+ln -sfn "$OPS/bin/dsh-logs.sh" "$HOME/.local/bin/dsh-logs"
+
+# Keep the login-shell PATH current, and drop what earlier installs left behind
+# (aliases, and this block itself, which is rewritten rather than duplicated).
+sed -i '/^alias dsh-\(update\|url\|logs\)=/d' ~/.bashrc
+sed -i '/^# dsh-ops helpers$/d; /^export PATH="\$HOME\/\.local\//d' ~/.bashrc
+cat >> ~/.bashrc <<'BLOCK'
 
 # dsh-ops helpers
-export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/node/bin:$PATH"
-BLOCK
-# Rewrite the three aliases to this checkout on every run.
-sed -i '/^alias dsh-\(update\|url\|logs\)=/d' ~/.bashrc
-cat >> ~/.bashrc <<BLOCK
-alias dsh-update="$OPS/bin/dsh-sync.sh"
-alias dsh-url="$OPS/bin/dsh-url.sh"
-alias dsh-logs='journalctl --user -u dsh-web -u dsh-go -f'
+export PATH="$HOME/.local/bin:$HOME/.local/share/pnpm/bin:$HOME/.local/node/bin:$PATH"
 BLOCK
 
 echo "install: done. Next: $OPS/bin/dsh-sync.sh --dry-run"

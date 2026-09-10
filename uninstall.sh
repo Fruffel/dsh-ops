@@ -38,11 +38,17 @@ for u in dsh-web.service dsh-go.service dsh-proxy.service dsh-update.service dsh
 done
 run systemctl --user daemon-reload
 
-if grep -q '^alias dsh-\(update\|url\|logs\)=' ~/.bashrc 2>/dev/null; then
+for cmd in dsh-update dsh-url dsh-logs; do
+  if [ -L "$HOME/.local/bin/$cmd" ]; then
+    run rm -f "$HOME/.local/bin/$cmd"
+  fi
+done
+
+if grep -q -e '^alias dsh-\(update\|url\|logs\)=' -e '^# dsh-ops helpers$' ~/.bashrc 2>/dev/null; then
   if [ "$DRY_RUN" = 1 ]; then
-    echo "+ sed -i '/^alias dsh-(update|url|logs)=/d' ~/.bashrc"
+    echo "+ remove the dsh-ops alias/PATH block from ~/.bashrc"
   else
-    sed -i '/^alias dsh-\(update\|url\|logs\)=/d' ~/.bashrc
+    sed -i '/^alias dsh-\(update\|url\|logs\)=/d; /^# dsh-ops helpers$/d; /^export PATH="\$HOME\/\.local\//d' ~/.bashrc
   fi
 fi
 
