@@ -15,6 +15,7 @@ Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-a
 | `bin/dsh-install-assets.sh` | Renders units + profile layer from this checkout (ownership-marker aware) |
 | `bin/dsh-sync.sh` | Smart updater: newest tag on a channel → build → smoke test → swap, or keep last good |
 | `bin/dsh-go.mjs` | Token-free entry: tailnet `:3081` → 302 to the current `?token=` URL |
+| `bin/dsh-check-gui.mjs` | Acceptance check: drives real Chrome from the tailnet into Settings → Models |
 | `bin/dsh-url.sh` | Prints the current `?token=` URLs (local, tailnet IP, MagicDNS) |
 | `proxy/tailscale-proxy.mjs` | User-space TCP forwarder: tailnet `:3080` → `127.0.0.1:3080` |
 | `systemd/` | User units: `dsh-web`, `dsh-proxy`, `dsh-go`, `dsh-update` (+ daily 03:00 timer) |
@@ -153,6 +154,18 @@ dsh-update --dry-run       # show what would happen
 dsh-url                    # current token URLs
 dsh-logs                   # follow dsh-web + dsh-proxy
 bin/dsh-install-assets.sh --dry-run   # show unit/profile-layer drift
+bin/dsh-check-gui.mjs      # browser check: tailnet -> Models page renders
+```
+
+`bin/dsh-check-gui.mjs [entry-url]` drives headless Chrome from whatever
+machine runs it over the tailnet, follows `dsh-go` into the app, opens
+Settings → Models and fails when the panel says "settings are unavailable in
+this browser" again. It needs no packages (CDP over Node's WebSocket) and
+resolves Chrome from `$CHROME` or the usual paths. Run it after an update:
+
+```sh
+bin/dsh-check-gui.mjs                            # http://kamer:3081/
+bin/dsh-check-gui.mjs http://kamer.tail39c8ca.ts.net:3081/
 ```
 
 ## Troubleshooting
