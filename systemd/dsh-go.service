@@ -1,12 +1,18 @@
 [Unit]
-Description=DSH token-free entry (tailnet :3081 -> current ?token= URL)
-After=dsh-web.service network-online.target tailscaled.service
+Description=DSH token-free entry (:3081 -> current ?token= URL)
+After=dsh-web.service network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=@@OPS@@
 Environment=PATH=%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# A bare GET is answered with a redirect carrying the current launch token,
+# which mints the browser cookie -- no token juggling, no network discovery:
+# it listens on every interface, and redirects to whichever address you used.
+# This is also the one endpoint that hands out a session to whoever asks, so
+# export DSH_GO_HOST=<address> to narrow it to a single interface if you ever
+# want that; nothing else depends on it.
 ExecStart=%h/.local/node/bin/node @@OPS@@/bin/dsh-go.mjs
 Restart=always
 RestartSec=5

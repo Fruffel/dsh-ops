@@ -32,6 +32,27 @@ case "${1:-}" in
   *) echo "usage: dsh-install-assets.sh [--dry-run]"; exit 2 ;;
 esac
 
+# Units this repo shipped once and no longer does. Retiring them here keeps a
+# pulled checkout authoritative over whatever a machine still has installed --
+# dsh-proxy held the tailnet address, which the harness now binds itself.
+RETIRED_UNITS='dsh-proxy.service'
+
+retire_units() {
+  local unit
+  for unit in $RETIRED_UNITS; do
+    [ -f "$UNIT_DIR/$unit" ] || continue
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "+ retire $unit"
+    else
+      systemctl --user stop "$unit" 2>/dev/null || true
+      systemctl --user disable "$unit" 2>/dev/null || true
+      rm -f "$UNIT_DIR/$unit"
+      echo "unit: retired $unit"
+    fi
+    CHANGED=$((CHANGED + 1))
+  done
+}
+
 # Unit templates carry @@OPS@@ where the checkout path belongs.
 install_units() {
   local src name dst rendered
@@ -102,6 +123,8 @@ install_profile_layer() {
   CHANGED=$((CHANGED + 1))
 }
 
+# Retire first: the harness must be able to take the address a retired unit held.
+retire_units
 install_units
 install_profile_layer
 echo "assets: checkout $OPS -> $UNIT_DIR, $PROFILE_DIR (dry-run=$DRY_RUN)"

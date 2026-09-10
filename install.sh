@@ -25,7 +25,7 @@ fi
 export PATH="$HOME/.local/share/pnpm/bin:$PATH"
 pnpm -v
 
-command -v tailscale >/dev/null || echo "install: WARNING no tailscale on PATH; dsh-proxy and dsh-go need it"
+
 
 mkdir -p ~/.config/systemd/user
 chmod +x "$OPS/bin/"*.sh
@@ -34,10 +34,8 @@ chmod +x "$OPS/bin/"*.sh
 "$OPS/bin/dsh-install-assets.sh"
 
 systemctl --user daemon-reload
-systemctl --user enable dsh-web.service dsh-go.service dsh-proxy.service dsh-update.timer
-# dsh-proxy binds the tailnet address, so it may fail until dsh-web is on
-# loopback; its Restart=always converges on its own.
-systemctl --user start dsh-update.timer dsh-proxy.service dsh-go.service
+systemctl --user enable dsh-web.service dsh-go.service dsh-update.timer
+systemctl --user start dsh-update.timer dsh-go.service
 
 grep -q 'dsh-ops helpers' ~/.bashrc || cat >> ~/.bashrc <<'BLOCK'
 
@@ -49,7 +47,7 @@ sed -i '/^alias dsh-\(update\|url\|logs\)=/d' ~/.bashrc
 cat >> ~/.bashrc <<BLOCK
 alias dsh-update="$OPS/bin/dsh-sync.sh"
 alias dsh-url="$OPS/bin/dsh-url.sh"
-alias dsh-logs='journalctl --user -u dsh-web -u dsh-proxy -f'
+alias dsh-logs='journalctl --user -u dsh-web -u dsh-go -f'
 BLOCK
 
 echo "install: done. Next: $OPS/bin/dsh-sync.sh --dry-run"

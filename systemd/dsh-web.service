@@ -1,5 +1,5 @@
 [Unit]
-Description=DeepSeek Harness Web UI from source (dsh web, loopback bind)
+Description=DeepSeek Harness Web UI from source (dsh web)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,12 +7,15 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=@@OPS@@/harness/current
 Environment=PATH=%h/.local/share/pnpm/bin:%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-# The harness binds loopback only; dsh-proxy publishes it on the tailnet.
-# --trusted-host names the authorities the /api Host/Origin fence accepts --
-# the only place that list lives. The operator-surface plugin reads the same
-# list back out of the running host (ctx.webRuntime.trustedHosts), so adding an
-# authority here is the whole change.
-ExecStart=%h/.local/share/pnpm/bin/pnpm dsh web --no-open --host 127.0.0.1 --port 3080 --trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net --trusted-host 100.93.30.88
+# The bind lives in the profile layer (~/.dsh/profiles/web/cordis.patch.yml,
+# host: '0.0.0.0'): the harness then answers on every interface at once, and its
+# Web runtime trusts each non-internal IPv4 literal it sampled at boot, so no
+# address list has to be kept in step with the network. Drop that row to return
+# to the bundle's loopback default.
+# --trusted-host names the authorities that are NOT IP literals -- the tailnet
+# names a browser may type. The operator-surface plugin reads the resulting
+# list back out of the running host (ctx.webRuntime.trustedHosts).
+ExecStart=%h/.local/share/pnpm/bin/pnpm dsh web --no-open --port 3080 --trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net --trusted-host 100.93.30.88
 Restart=always
 RestartSec=5
 

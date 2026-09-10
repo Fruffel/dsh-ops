@@ -7,7 +7,28 @@
 #
 # Read the design notes in the repo README before changing these rows.
 
-# 1. The /api browser-trust fence and the browser cookie lifetime.
+# 1. Bind every interface.
+#    The CLI refuses `--host 0.0.0.0` ("binding all network interfaces is not
+#    supported"), but the Web runtime itself supports an all-interfaces bind:
+#    resolveLanTrust samples every non-internal IPv4 literal once at boot and
+#    adds them to the /api fence, and the printed URL line gains a "(LAN: ...)"
+#    address. Declaring it here is what makes any address the host answers on —
+#    tailnet IPv4, MagicDNS name, LAN IP — work without maintaining a list, and
+#    it survives a tailnet address change with no restart.
+#    A patch replaces the targeted row's WHOLE config, so every key the row
+#    owns is restated. `--host` no longer decides anything while this row is
+#    here; drop the row to go back to the bundle's loopback default.
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  inject: [webStartup]
+  config:
+    host: '0.0.0.0'
+    port: !!js ctx.webStartup.port ?? 3080
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
+
+# 2. The /api browser-trust fence and the browser cookie lifetime.
 #    A patch replaces the targeted row's WHOLE config, so `trustedHosts` is
 #    restated with the bundle's own expression (bind-derived authorities plus
 #    every --trusted-host of this invocation). Omitting it would fall back to
@@ -17,7 +38,7 @@
     trustedHosts: !!js ctx.webRuntime.trustedHosts
     cookieMaxAgeDays: 365
 
-# 2. The modules node half registers its /plugins route on the webserver, and
+# 3. The modules node half registers its /plugins route on the webserver, and
 #    when that service is already active it reads it through a bare
 #    `ctx.webServer` property access — one that resolves only when webServer sits
 #    on the reading fiber. Declaring the dependency is what the code means: the
@@ -29,7 +50,7 @@
   name: '@deepseek-ai/dsh-client-modules'
   inject: [webServer]
 
-# 3. The operator-surface plugin: pages served on a fence-trusted authority
+# 4. The operator-surface plugin: pages served on a fence-trusted authority
 #    declare themselves the operator's own surface, so host-backed settings
 #    (Models, API keys, appearance) work over the tailnet instead of degrading
 #    to process-local memory. The plugin reads its authorities from the live

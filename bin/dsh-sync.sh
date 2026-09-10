@@ -96,7 +96,7 @@ if [ "$TARGET" = "$DEPLOYED" ] && [ -L "$CURRENT" ]; then
   fi
   echo "dsh-sync: already on $TARGET, restarting for refreshed units/profile layer"
   systemctl --user daemon-reload
-  systemctl --user restart dsh-web.service dsh-proxy.service
+  systemctl --user restart dsh-web.service dsh-go.service
   exit 0
 fi
 
@@ -125,8 +125,10 @@ echo "dsh-sync: building"
   exit 1
 }
 
+# The bind comes from the profile layer (0.0.0.0), so the smoke boot exercises
+# the same composition the service runs; only the port differs.
 echo "dsh-sync: smoke test (boot on OS-assigned port)"
-SMOKE="$(cd "$BUILD_DIR" && timeout 90 pnpm dsh web --no-open --host 127.0.0.1 --port 0 2>&1 || true)"
+SMOKE="$(cd "$BUILD_DIR" && timeout 90 pnpm dsh web --no-open --port 0 2>&1 || true)"
 echo "$SMOKE" | grep -q "dsh web: http" || {
   echo "dsh-sync: smoke test failed, keeping ${DEPLOYED:-nothing}"
   echo "$SMOKE" | tail -n 20
@@ -142,9 +144,9 @@ systemctl --user daemon-reload
 
 if systemctl --user restart dsh-web.service; then
   systemctl --user is-active dsh-web.service
-  # The forwarder owns the tailnet socket; restart it so it rebinds cleanly
-  # against the restarted harness.
-  systemctl --user restart dsh-proxy.service || echo "dsh-sync: WARNING: dsh-proxy restart failed"
+  # dsh-go re-reads the launch token from the journal, and its redirect target
+  # is the authority the browser used, so it only needs to be up.
+  systemctl --user restart dsh-go.service     || echo "dsh-sync: WARNING: dsh-go restart failed (token-free entry may 503 until it is back)"
   echo "dsh-sync: dsh-web restarted on $TARGET"
 else
   echo "dsh-sync: WARNING: restart failed"

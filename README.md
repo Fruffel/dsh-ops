@@ -1,7 +1,8 @@
 # dsh-ops
 
 Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-(`dsh web`) **from source** on `kamer-ts` and exposes it on the tailnet.
+(`dsh web`) **from source** on `kamer-ts`, binds it everywhere, and keeps the
+one endpoint that mints sessions on the tailnet.
 
 ## Layout
 
@@ -17,8 +18,7 @@ Small ops project that runs the [DeepSeek Harness](https://github.com/deepseek-a
 | `bin/dsh-go.mjs` | Token-free entry: tailnet `:3081` → 302 to the current `?token=` URL |
 | `bin/dsh-check-gui.mjs` | Acceptance check: drives real Chrome from the tailnet into Settings → Models |
 | `bin/dsh-url.sh` | Prints the current `?token=` URLs (local, tailnet IP, MagicDNS) |
-| `proxy/tailscale-proxy.mjs` | User-space TCP forwarder: tailnet `:3080` → `127.0.0.1:3080` |
-| `systemd/` | User units: `dsh-web`, `dsh-proxy`, `dsh-go`, `dsh-update` (+ daily 03:00 timer) |
+| `systemd/` | User units: `dsh-web`, `dsh-go`, `dsh-update` (+ daily 03:00 timer) |
 | `install.sh` | Bootstrap a machine: node check, pnpm, units, profile layer, aliases |
 
 The repo does not have to live at `~/Documents/dsh-ops`: `bin/dsh-install-assets.sh`
@@ -26,25 +26,42 @@ renders the checkout's own path into the unit templates (`@@OPS@@`).
 
 ## Design notes
 
-### The harness never leaves loopback
+### Everything binds 0.0.0.0
 
-Upstream refuses to bind all interfaces — `dsh web --host 0.0.0.0` exits with a
-usage error, and the package README ends with "Binding all network interfaces is
-not supported — use the default loopback host". So `dsh-web` runs exactly as
-shipped (`--host 127.0.0.1`, no `webserver` row in the profile layer), and the
-tailnet listener is `dsh-proxy`: a raw TCP forwarder bound to the machine's
-tailnet address only. Raw TCP is what makes this cheap — `Host`, `Origin`,
-cookies, `Sec-Fetch-*` and WebSockets all cross untouched, so the harness still
-sees the authority the browser typed. Nothing else on the machine (LAN, docker
-bridges) is exposed.
+Upstream's CLI refuses `--host 0.0.0.0` ("binding all network interfaces is not
+supported"), but the Web runtime underneath supports it: `resolveLanTrust`
+samples every non-internal IPv4 literal once at boot, adds them to the `/api`
+fence, and the startup line gains a `(LAN: ...)` address. dsh-ops declares that
+bind in the profile layer instead of the flag, so:
+
+* every address the host answers on works — tailnet IPv4, MagicDNS name, LAN IP,
+  `localhost` — with no address list to keep in step;
+* a tailnet address change needs no restart and no re-discovery;
+* there is no forwarder process: the harness owns `:3080` itself, so `Host`,
+  `Origin`, cookies, `Sec-Fetch-*` and WebSockets arrive untouched.
+
+Nothing in the stack requires Tailscale, or any other specific network: no
+address discovery, no forwarder, no unit ordering on `tailscaled`. Tailscale is
+simply one of the interfaces the host happens to answer on.
+
+`dsh-go` on `:3081` binds `0.0.0.0` the same way and redirects to whichever
+address you used, so `http://kamer:3081/` and `http://192.168.1.42:3081/` both
+work with the same bookmark habit. One thing to know about it: it is the only
+endpoint that hands out a session to whoever asks (a bare `GET` earns a redirect
+carrying the launch token, which mints the cookie), so every network the host is
+attached to can reach the GUI through it. Set `DSH_GO_HOST=192.168.1.42` (or any
+address) in `dsh-go.service` to narrow that single entry — everything on `:3080`
+keeps working unchanged, and still needs the cookie.
 
 ### Reachability and identity are two different fences
 
 * **Host/Origin fence** (`dsh-client-connection`, applied to every `/api`
   request): the `Host` must be loopback or match a `trustedHosts` entry, and an
-  attached `Origin` must equal it. `--trusted-host` in `dsh-web.service` is the
-  single place the tailnet authorities are declared; upstream calls this a
-  "custom non-loopback composition", which is supported by design.
+  attached `Origin` must equal it. IP literals are trusted automatically
+  (sampled from the live interfaces); `--trusted-host` in `dsh-web.service` only
+  has to name the non-IP authorities a browser may type, i.e. `kamer` and the
+  MagicDNS name. Upstream calls this a "custom non-loopback composition", which
+  is supported by design.
 * **Identity**: every RPC and WebSocket needs the signed browser cookie minted
   from the launch token. The `?token=` URL is needed **once** per authority;
   `cookieMaxAgeDays: 365` in the profile layer makes that cookie outlive
@@ -130,8 +147,8 @@ bin/dsh-sync.sh          # first build + deploy (takes minutes)
 ```
 
 `install.sh` installs pnpm, renders the units, installs the profile layer,
-enables `dsh-web`, `dsh-proxy`, `dsh-go` and the 03:00 timer, and writes the
-shell aliases. Re-running it is safe.
+enables `dsh-web`, `dsh-go` and the 03:00 timer, and writes the shell aliases.
+Re-running it is safe, and it retires units this repo no longer ships.
 
 Remove: `./uninstall.sh` stops/disables services, removes units and aliases and
 keeps repo + data. `./uninstall.sh --purge` also removes the repo checkout,
@@ -152,7 +169,7 @@ dsh-update --channel stable
 dsh-update --ref dsh-v0.1.5-rc.2   # pin / roll back to a tag
 dsh-update --dry-run       # show what would happen
 dsh-url                    # current token URLs
-dsh-logs                   # follow dsh-web + dsh-proxy
+dsh-logs                   # follow dsh-web + dsh-go
 bin/dsh-install-assets.sh --dry-run   # show unit/profile-layer drift
 bin/dsh-check-gui.mjs      # browser check: tailnet -> Models page renders
 ```
@@ -172,7 +189,8 @@ bin/dsh-check-gui.mjs http://kamer.tail39c8ca.ts.net:3081/
 
 | Symptom | Cause |
 | --- | --- |
-| `403 forbidden` from `/api` | The authority you typed is not in `--trusted-host` (`dsh-web.service`); add it and rerun `bin/dsh-install-assets.sh` + `systemctl --user restart dsh-web` |
+| `403 forbidden` from `/api` | You reached the GUI on a **name** that is not in `--trusted-host` (`dsh-web.service`); IP literals are trusted automatically, so add the name and rerun `bin/dsh-install-assets.sh` + `systemctl --user restart dsh-web` |
 | `401 unauthorized` / login loop | You changed authority (host/port) and need the `?token=` URL once for that one — use `dsh-go` on `:3081` |
 | "settings are unavailable in this browser" | The operator-surface plugin is not mounted, or you reached the page on an authority outside `--trusted-host`. Check `systemctl --user status dsh-web` and `bin/dsh-install-assets.sh --dry-run` |
-| Tailnet `:3080` refuses connections | `dsh-proxy` is down or DSH took the socket: `systemctl --user status dsh-proxy dsh-web` (the proxy retries every 5s) |
+| Nothing answers on `:3080` | `systemctl --user status dsh-web`; the bind lives in the profile layer, so also check `bin/dsh-install-assets.sh --dry-run` and `journalctl --user -u dsh-web -n 50` |
+| `:3081` answers 503 | `dsh-go` reads the launch token from the `dsh-web` journal; if `dsh-web` has not printed its URL line yet, reload in a moment |
