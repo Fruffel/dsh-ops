@@ -9,12 +9,17 @@ command -v node >/dev/null || { echo "install: node not found at ~/.local/node/b
 node -v
 
 if ! command -v pnpm >/dev/null; then
-  echo "install: installing standalone pnpm"
+  echo "install: installing standalone pnpm 11.7.0 (upstream pin)"
   export PNPM_HOME="$HOME/.local/share/pnpm"
   mkdir -p "$PNPM_HOME"
-  curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/bash bash -
+  curl -fsSL https://get.pnpm.io/install.sh | PNPM_VERSION=11.7.0 SHELL=/bin/bash bash -
 fi
-export PATH="$HOME/.local/share/pnpm:$PATH"
+# Enforce the pinned major even if a pnpm already existed.
+if [ "$(pnpm -v 2>/dev/null)" != "11.7.0" ]; then
+  echo "install: switching pnpm to 11.7.0 (upstream pin)"
+  curl -fsSL https://get.pnpm.io/install.sh | PNPM_VERSION=11.7.0 SHELL=/bin/bash bash -
+fi
+export PATH="$HOME/.local/share/pnpm/bin:$PATH"
 pnpm -v
 
 mkdir -p ~/.config/systemd/user
@@ -26,7 +31,7 @@ systemctl --user daemon-reload
 grep -q 'dsh-ops helpers' ~/.bashrc || cat >> ~/.bashrc <<'BLOCK'
 
 # dsh-ops helpers
-export PATH="$HOME/.local/share/pnpm:$HOME/.local/node/bin:$PATH"
+export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/node/bin:$PATH"
 alias dsh-update="$HOME/Documents/dsh-ops/bin/dsh-sync.sh"
 alias dsh-url="$HOME/Documents/dsh-ops/bin/dsh-url.sh"
 alias dsh-logs='journalctl --user -u dsh-web -u dsh-proxy -f'

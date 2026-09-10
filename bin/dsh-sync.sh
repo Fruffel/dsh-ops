@@ -8,7 +8,7 @@ UPSTREAM="$OPS/harness/upstream"
 BUILDS="$OPS/harness/builds"
 CURRENT="$OPS/harness/current"
 REF_FILE="$OPS/harness/current-ref"
-export PATH="$HOME/.local/share/pnpm:$HOME/.local/node/bin:$PATH"
+export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/node/bin:$PATH"
 
 CHANNEL="rc"
 DRY_RUN=0
