@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Print the current DSH URLs. The ?token= rotates on every restart, so open one
 # of these once per address to mint the browser cookie for that address.
-# Addresses come from the machine's own interface list: nothing here needs
-# Tailscale or any other specific network.
+# Addresses come from the machine's own interface list -- no Tailscale or other
+# network-specific discovery -- and container bridges are skipped because they
+# are not reachable from other machines.
 set -uo pipefail
 
 PORT="${DSH_TARGET_PORT:-3080}"
@@ -16,15 +17,26 @@ if [ -z "$LINE" ]; then
 fi
 TOKEN="$(printf '%s' "$LINE" | sed 's/.*token=//')"
 
-echo "local:     $LINE"
-ADDRESSES="$(hostname -I 2>/dev/null || true)"
-if [ -z "$ADDRESSES" ]; then
-  ADDRESSES="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 || true)"
+echo "local:      $LINE"
+
+print_address() {
+  echo "address:    http://$1:$PORT/?token=$TOKEN   ($2)"
+}
+
+if command -v ip >/dev/null 2>&1; then
+  ip -4 -o addr show scope global 2>/dev/null | while read -r _ ifname _ addr _; do
+    case "$ifname" in
+      lo|docker*|br-*|veth*|virbr*) continue ;;
+    esac
+    print_address "$(printf '%s' "$addr" | cut -d/ -f1)" "$ifname"
+  done
+else
+  for ip_addr in $(hostname -I 2>/dev/null || true); do
+    case "$ip_addr" in
+      127.*) continue ;;
+    esac
+    print_address "$ip_addr" "interface"
+  done
 fi
-for ip in $ADDRESSES; do
-  case "$ip" in
-    127.*) continue ;;
-  esac
-  echo "address:   http://$ip:$PORT/?token=$TOKEN"
-done
-echo "bookmark:  http://<one of the addresses above>:$GO_PORT/   (dsh-go mints the cookie)"
+
+echo "bookmark:   http://<one of the addresses above>:$GO_PORT/   (dsh-go mints the cookie)"
