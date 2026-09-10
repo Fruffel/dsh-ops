@@ -38,6 +38,9 @@ DSH_TRUSTED_HOSTS="dsh.example.com work-laptop.lan"
 
 ## Commands
 
+These are installed as real executables in `~/.local/bin` (aliases would only
+exist in interactive bash), so scripts and other shells resolve them too:
+
 | Command | What |
 | --- | --- |
 | `dsh-update` | Update now (build newest tag, swap, restart); `--dry-run`, `--ref <tag>` to pin |

@@ -14,7 +14,13 @@
 # usage: dsh-install-assets.sh [--dry-run]
 set -euo pipefail
 
-OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The checkout is found through the script itself, not through the path it was
+# called by: dsh-update and friends are symlinks in ~/.local/bin.
+SELF="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+  SELF="$(readlink -f "$SELF" 2>/dev/null || printf '%s' "$SELF")"
+fi
+OPS="$(cd "$(dirname "$SELF")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 PROFILE_DIR="$DSH_HOME_DIR/profiles/web"

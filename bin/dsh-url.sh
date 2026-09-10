@@ -6,7 +6,13 @@
 # are not reachable from other machines.
 set -uo pipefail
 
-OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The checkout is found through the script itself, not through the path it was
+# called by: dsh-update and friends are symlinks in ~/.local/bin.
+SELF="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+  SELF="$(readlink -f "$SELF" 2>/dev/null || printf '%s' "$SELF")"
+fi
+OPS="$(cd "$(dirname "$SELF")/.." && pwd)"
 # Ports follow dsh-ops.conf when the checkout has one; the environment wins.
 DSH_PORT=3080
 DSH_GO_PORT=3081

@@ -3,7 +3,13 @@
 # Never leaves the service on a broken build: failures keep `current` as-is.
 set -euo pipefail
 
-OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The checkout is found through the script itself, not through the path it was
+# called by: dsh-update and friends are symlinks in ~/.local/bin.
+SELF="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+  SELF="$(readlink -f "$SELF" 2>/dev/null || printf '%s' "$SELF")"
+fi
+OPS="$(cd "$(dirname "$SELF")/.." && pwd)"
 UPSTREAM="$OPS/harness/upstream"
 BUILDS="$OPS/harness/builds"
 CURRENT="$OPS/harness/current"
