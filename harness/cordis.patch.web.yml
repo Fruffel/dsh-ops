@@ -17,7 +17,19 @@
     trustedHosts: !!js ctx.webRuntime.trustedHosts
     cookieMaxAgeDays: 365
 
-# 2. The operator-surface plugin: pages served on a fence-trusted authority
+# 2. The modules node half registers its /plugins route on the webserver, and
+#    when that service is already active it reads it through a bare
+#    `ctx.webServer` property access — one that resolves only when webServer sits
+#    on the reading fiber. Declaring the dependency is what the code means: the
+#    fiber waits for the server and the read is legal. Without it a boot fails
+#    with 'cannot get property "webServer" without inject' often enough to
+#    matter (1 in 8 measured here) and systemd restarts the service.
+#    Drop this row when upstream declares the injection itself.
+- id: modules
+  name: '@deepseek-ai/dsh-client-modules'
+  inject: [webServer]
+
+# 3. The operator-surface plugin: pages served on a fence-trusted authority
 #    declare themselves the operator's own surface, so host-backed settings
 #    (Models, API keys, appearance) work over the tailnet instead of degrading
 #    to process-local memory. The plugin reads its authorities from the live

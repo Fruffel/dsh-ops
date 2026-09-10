@@ -105,10 +105,19 @@ while the marker is there dsh-ops refreshes it (keeping a `.bak`); delete the
 marker and the file becomes yours and is never overwritten. `DSH_HOME` data
 otherwise (sessions, credentials, settings) is untouched by syncs.
 
-One subtlety the marker protects: a loader patch replaces the targeted row's
-**whole** config, so the `connection` row restates `trustedHosts` with the
-bundle's own expression (`!!js ctx.webRuntime.trustedHosts`). Dropping that line
-would silently fall back to `[]` and answer 403 to every tailnet request.
+Two details the layer carries beyond the plugin:
+
+* A loader patch replaces the targeted row's **whole** config, so the
+  `connection` row restates `trustedHosts` with the bundle's own expression
+  (`!!js ctx.webRuntime.trustedHosts`). Dropping that line would silently fall
+  back to `[]` and answer 403 to every tailnet request.
+* The `modules` row gets `inject: [webServer]`. Its node half registers the
+  `/plugins` route on the webserver and, when that service is already active,
+  reads it through a bare `ctx.webServer` property access that only resolves
+  when the service sits on the reading fiber. Without the declaration a boot
+  fails with `cannot get property "webServer" without inject` — measured at
+  1 boot in 8 here, and only ever self-healed by `Restart=always`. Drop the row
+  when upstream declares the injection itself.
 
 ## Setup / uninstall
 
