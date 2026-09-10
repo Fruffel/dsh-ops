@@ -6,7 +6,15 @@
 # are not reachable from other machines.
 set -uo pipefail
 
-PORT="${DSH_TARGET_PORT:-3080}"
+OPS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Ports follow dsh-ops.conf when the checkout has one; the environment wins.
+DSH_PORT=3080
+DSH_GO_PORT=3081
+if [ -f "$OPS/dsh-ops.conf" ]; then
+  # shellcheck disable=SC1090 -- operator-owned file beside this checkout
+  . "$OPS/dsh-ops.conf"
+fi
+PORT="${DSH_TARGET_PORT:-${DSH_PORT:-3080}}"
 GO_PORT="${DSH_GO_PORT:-3081}"
 
 LINE="$(journalctl --user -u dsh-web.service -n 200 --no-pager 2>/dev/null \

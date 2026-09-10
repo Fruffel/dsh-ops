@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=@@OPS@@
 Environment=PATH=%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=DSH_GO_PORT=@@DSH_GO_PORT@@
+Environment=DSH_TARGET_PORT=@@DSH_PORT@@
 # A bare GET is answered with a redirect carrying the current launch token,
 # which mints the browser cookie -- no token juggling, no network discovery:
 # it listens on every interface, and redirects to whichever address you used.

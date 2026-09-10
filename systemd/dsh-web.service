@@ -12,10 +12,11 @@ Environment=PATH=%h/.local/share/pnpm/bin:%h/.local/node/bin:/usr/local/sbin:/us
 # Web runtime trusts each non-internal IPv4 literal it sampled at boot, so no
 # address list has to be kept in step with the network. Drop that row to return
 # to the bundle's loopback default.
-# --trusted-host names the authorities that are NOT IP literals -- the tailnet
-# names a browser may type. The operator-surface plugin reads the resulting
-# list back out of the running host (ctx.webRuntime.trustedHosts).
-ExecStart=%h/.local/share/pnpm/bin/pnpm dsh web --no-open --port 3080 --trusted-host kamer --trusted-host kamer.tail39c8ca.ts.net --trusted-host 100.93.30.88
+# @@TRUSTED_HOSTS@@ comes from dsh-ops.conf (DSH_TRUSTED_HOSTS) and names the
+# authorities that are NOT IP literals -- the hostnames a browser may type. The
+# operator-surface plugin reads the resulting list back out of the running host
+# (ctx.webRuntime.trustedHosts). Empty is fine when you reach the GUI by IP.
+ExecStart=%h/.local/share/pnpm/bin/pnpm dsh web --no-open --port @@DSH_PORT@@@@TRUSTED_HOSTS@@
 Restart=always
 RestartSec=5
 

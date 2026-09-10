@@ -1,8 +1,11 @@
-# Machine-local harness artifacts (kamer-ts): never committed.
+# Machine-local harness artifacts: never committed.
 harness/upstream/
 harness/builds/
 harness/current
 harness/current-ref
+
+# Per-machine deployment settings, copied from dsh-ops.conf.example.
+dsh-ops.conf
 
 # Local scratch (ssh helper, one-off probes): never committed.
 scratch/

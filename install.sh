@@ -30,7 +30,14 @@ pnpm -v
 mkdir -p ~/.config/systemd/user
 chmod +x "$OPS/bin/"*.sh
 
-# Units (rendered with this checkout's path) + the web profile layer.
+# Machine-local settings: created once, then owned by the operator (git-ignored).
+if [ ! -f "$OPS/dsh-ops.conf" ]; then
+  cp "$OPS/dsh-ops.conf.example" "$OPS/dsh-ops.conf"
+  echo "install: wrote $OPS/dsh-ops.conf — set DSH_TRUSTED_HOSTS there if you reach"
+  echo "install:          this host by NAME; by IP everything already works"
+fi
+
+# Units (rendered with this checkout's path and dsh-ops.conf) + profile layer.
 "$OPS/bin/dsh-install-assets.sh"
 
 systemctl --user daemon-reload
@@ -51,3 +58,5 @@ alias dsh-logs='journalctl --user -u dsh-web -u dsh-go -f'
 BLOCK
 
 echo "install: done. Next: $OPS/bin/dsh-sync.sh --dry-run"
+echo "install: reach this host by IP out of the box; add any hostname you type to"
+echo "install: DSH_TRUSTED_HOSTS in $OPS/dsh-ops.conf, then re-run this script"

@@ -1,0 +1,23 @@
+# Machine-local dsh-ops settings.
+#
+# install.sh copies this file to dsh-ops.conf on first run; edit that copy --
+# dsh-ops.conf is git-ignored, so pulls and the daily updater never touch it.
+# bin/dsh-install-assets.sh renders these values into the systemd units, which
+# means every later install.sh / dsh-sync.sh run keeps whatever this file says.
+# After editing, run:  bin/dsh-install-assets.sh && systemctl --user daemon-reload
+
+# Ports: DSH_PORT serves the GUI, DSH_GO_PORT the token-free bookmark entry.
+DSH_PORT=3080
+DSH_GO_PORT=3081
+
+# Authorities you reach this host by when they are NAMES rather than IP
+# literals, separated by spaces. The harness already trusts every IP address it
+# answers on, so this list only has to name hostnames: DNS, MagicDNS, an
+# /etc/hosts alias, a reverse-proxy host, and so on. Leave it empty to reach the
+# GUI by IP only.
+#
+# A name that is missing here answers 403 on /api, and the Models page reports
+# unavailable settings, so this is the one setting most deployments want.
+#
+# Example: DSH_TRUSTED_HOSTS="dsh.example.com work-laptop.lan"
+DSH_TRUSTED_HOSTS=""

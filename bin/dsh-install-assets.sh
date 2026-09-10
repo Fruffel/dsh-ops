@@ -26,6 +26,41 @@ MARKER='dsh-ops:managed'
 DRY_RUN=0
 CHANGED=0
 
+# Machine-local settings live in the checkout, git-ignored, so the daily updater
+# re-renders the same units instead of dropping them. Defaults suit a plain
+# 0.0.0.0 deployment reached by IP.
+CONF="$OPS/dsh-ops.conf"
+DSH_PORT=3080
+DSH_GO_PORT=3081
+DSH_TRUSTED_HOSTS=""
+if [ -f "$CONF" ]; then
+  # shellcheck disable=SC1090 -- operator-owned file beside this checkout
+  . "$CONF"
+fi
+case "$DSH_PORT$DSH_GO_PORT" in
+  *[!0-9]*) echo "dsh-install-assets: DSH_PORT and DSH_GO_PORT must be numbers ($CONF)" >&2; exit 2 ;;
+esac
+
+# --trusted-host accepts one authority per flag, so one flag per configured name.
+# The leading space is deliberate: the unit template appends this immediately
+# after the port, and an empty list must leave no argument behind.
+TRUSTED_HOST_ARGS=""
+for authority in $DSH_TRUSTED_HOSTS; do
+  TRUSTED_HOST_ARGS="$TRUSTED_HOST_ARGS --trusted-host $authority"
+done
+
+# sed replacement text: backslash, the delimiter, and & all need escaping.
+escape_replacement() {
+  printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+}
+
+render_unit() {
+  sed -e "s|@@OPS@@|$(escape_replacement "$OPS")|g" \
+      -e "s|@@DSH_PORT@@|$(escape_replacement "$DSH_PORT")|g" \
+      -e "s|@@DSH_GO_PORT@@|$(escape_replacement "$DSH_GO_PORT")|g" \
+      -e "s|@@TRUSTED_HOSTS@@|$(escape_replacement "$TRUSTED_HOST_ARGS")|g" "$1" > "$2"
+}
+
 case "${1:-}" in
   --dry-run) DRY_RUN=1 ;;
   "") ;;
@@ -61,7 +96,7 @@ install_units() {
     name="$(basename "$src")"
     dst="$UNIT_DIR/$name"
     rendered="$(mktemp)"
-    sed "s|@@OPS@@|$OPS|g" "$src" > "$rendered"
+    render_unit "$src" "$rendered"
     if [ -f "$dst" ] && cmp -s "$rendered" "$dst"; then
       rm -f "$rendered"
       continue
@@ -127,5 +162,6 @@ install_profile_layer() {
 retire_units
 install_units
 install_profile_layer
+echo "assets: config $CONF (ports $DSH_PORT/$DSH_GO_PORT, trusted names: ${DSH_TRUSTED_HOSTS:-none})"
 echo "assets: checkout $OPS -> $UNIT_DIR, $PROFILE_DIR (dry-run=$DRY_RUN)"
 echo "assets: changed=$CHANGED"

@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
- * Tailnet GUI acceptance check: walk the real page from an entry URL through
+ * Remote GUI acceptance check: walk the real page from an entry URL through
  * dsh-go's token redirect into Settings -> Models, and fail when the shipped
  * non-loopback downgrade is back ("settings are unavailable in this browser").
  *
  * It is the regression check for the failure this repo exists to fix, and it
- * runs from a machine other than the host, over the tailnet, in a throwaway
- * browser profile. Chrome is driven over CDP with Node's built-in WebSocket, so
- * there are nothing to install.
+ * runs from a machine other than the host, over whatever network reaches it, in
+ * a throwaway browser profile. Chrome is driven over CDP with Node's built-in
+ * WebSocket, so there is nothing to install.
  *
  * usage: dsh-check-gui.mjs [entry-url] [--keep-open]
- *   entry-url   defaults to http://kamer:3081/ (dsh-go's token-free entry)
+ *   entry-url   defaults to http://127.0.0.1:3081/ (dsh-go's token-free entry);
+ *               pass the address you actually browse from, e.g.
+ *               http://myhost:3081/ or http://192.168.1.42:3081/
  *   CHROME      overrides the browser executable
  *
  * exit 0 when the Models page rendered its provider directory on the entry
@@ -35,7 +37,7 @@ const CANDIDATES = [
 
 const args = process.argv.slice(2)
 const keepOpen = args.includes('--keep-open')
-const entry = args.find((value) => !value.startsWith('--')) ?? 'http://kamer:3081/'
+const entry = args.find((value) => !value.startsWith('--')) ?? 'http://127.0.0.1:3081/'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
