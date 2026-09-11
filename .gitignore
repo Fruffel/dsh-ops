@@ -8,11 +8,11 @@ harness/current-ref
 # plugins.json + plugins.log): machine-local.
 harness/state/
 
-# The installed plugin checkouts, cloned from plugins.conf (and the machine-local
-# plugins.local.conf) by bin/dsh-plugins.sh. The repositories stay the source of
-# truth; this directory is disposable.
+# The plugin manifest and the checkouts it installs. Both are machine-local: the
+# tracked template is plugins.conf.example, and bin/dsh-plugins.sh clones every
+# entry into plugins/ (disposable, like harness/upstream and harness/builds).
+plugins.conf
 plugins/
-plugins.local.conf
 
 # Per-machine deployment settings, copied from dsh-ops.conf.example.
 dsh-ops.conf

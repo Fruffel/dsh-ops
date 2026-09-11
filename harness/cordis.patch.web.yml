@@ -52,8 +52,8 @@
 
 # Plugin rows are NOT written here. bin/dsh-install-assets.sh generates one
 # `- insert:` row per installed package — this repo's own under layer/, plus the
-# plugin repositories named in plugins.conf (and the machine-local
-# plugins.local.conf), which bin/dsh-plugins.sh checks out into plugins/.
+# plugin repositories named in the machine-local plugins.conf, which
+# bin/dsh-plugins.sh checks out into plugins/.
 #
 #   * adding a plugin is a line in plugins.conf, not an edit here;
 #   * a package names itself: `name` in its package.json becomes the row id and

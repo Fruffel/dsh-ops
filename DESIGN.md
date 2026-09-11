@@ -181,9 +181,10 @@ code.
   `harness/builds/<tag>`, smoke-tests it, and only then points `harness/current`
   at it. `harness/upstream` is a clone, `harness/builds` is worktrees; neither is
   in the repository.
-* **plugins** — `plugins.conf` (plus the machine-local `plugins.local.conf`)
-  names repositories; `bin/dsh-plugins.sh` clones them into `plugins/`. No
-  plugin's code is in this repository.
+* **plugins** — `plugins.conf`, machine-local and seeded from the tracked
+  `plugins.conf.example`, names repositories; `bin/dsh-plugins.sh` clones them
+  into `plugins/`. Neither plugin code nor the list of plugins a machine runs is
+  in this repository.
 
 Three consequences worth knowing:
 
@@ -195,8 +196,8 @@ Three consequences worth knowing:
    standing invitation to a fresh clone that mounts a package nobody installed.
 2. **Per-deployment config has one place to go**:
    `harness/cordis.patch.local.yml`, appended after the generated rows, patching
-   a row by id. Git-ignored, like `dsh-ops.conf`, so a pin never becomes part of
-   the repo.
+   a row by id. Git-ignored, like `dsh-ops.conf` and `plugins.conf`, so a pin
+   never becomes part of the repo.
 3. **`layer/` is the deliberate exception.** `dsh-ops-operator-surface` is needed
    by every deployment reached by name — without it a remote page reports
    "settings are unavailable in this browser" — so it ships in this repository
