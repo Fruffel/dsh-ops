@@ -87,10 +87,18 @@ Plugins are repositories too, so they get the same treatment one level down:
 ./bin/dsh-plugins.sh --list      # the manifest as this machine resolves it
 ```
 
-`plugins.conf` (tracked) is the manifest — one repository per line, optionally
-pinned to a ref. `plugins.local.conf` (git-ignored) adds machine-local entries,
-so a checkout only this machine runs never becomes part of this repo. Both are
-read by the installer and by the GUI.
+There are two manifests, and the split is the point:
+
+* **`plugins.conf`** (tracked) names exactly one repository: the updater. It is
+  what gives a bare clone a way to install anything else from the GUI. Plugin
+  code never belongs in this repository, and neither do the plugins a particular
+  deployment happens to run, so nothing else goes here.
+* **`plugins.local.conf`** (git-ignored, created from
+  `plugins.local.conf.example` by `install.sh`) is where every other entry
+  lives — one repository or local path per line, optionally pinned to a ref.
+
+Both are read by the installer and by the GUI, and both clone into the
+git-ignored `plugins/`.
 
 A checkout with local changes is reported and left alone, an entry whose
 checkout has no `origin` is reported as unmanaged, and a run that changes
@@ -179,7 +187,8 @@ generated rows and patches a row by id:
 | `bin/dsh-sync.sh` | The harness updater (`--check` to report, otherwise build → smoke test → swap, or keep last good) |
 | `bin/dsh-go.mjs` / `bin/dsh-url.sh` | The `:3081` entry / the URL helper |
 | `bin/dsh-check-gui.mjs` | Browser acceptance check |
-| `plugins.conf` / `plugins.local.conf` | The plugin manifest: repository URLs this machine installs (the second file is git-ignored) |
+| `plugins.conf` | The one plugin this repo names: the updater. Every other entry belongs in the machine-local file |
+| `plugins.local.conf` / `.example` | This machine's plugin repositories (git-ignored, created by `install.sh`) |
 | `plugins/` | Git-ignored: the plugin checkouts themselves, cloned from the manifest |
 | `layer/` | This repo's own plugin packages, always installed because every deployment needs them (`dsh-ops-operator-surface`) |
 | `bin/dsh-plugins.sh` | The plugin installer/updater: install, check, update, list |

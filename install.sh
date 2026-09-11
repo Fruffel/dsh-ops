@@ -37,6 +37,14 @@ if [ ! -f "$OPS/dsh-ops.conf" ]; then
   echo "install:          this host by NAME; by IP everything already works"
 fi
 
+# The machine-local plugin manifest, created once and then owned by the
+# operator (git-ignored). The tracked plugins.conf names only the updater, which
+# is what a bare clone needs; everything this machine runs lives here.
+if [ ! -f "$OPS/plugins.local.conf" ]; then
+  cp "$OPS/plugins.local.conf.example" "$OPS/plugins.local.conf"
+  echo "install: wrote $OPS/plugins.local.conf — list this machine's plugin repositories there"
+fi
+
 # Units (rendered with this checkout's path and dsh-ops.conf) + profile layer.
 "$OPS/bin/dsh-install-assets.sh"
 

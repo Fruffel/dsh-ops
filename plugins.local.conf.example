@@ -1,0 +1,18 @@
+# Machine-local plugin entries, copied here by install.sh on first run.
+#
+# Same format as plugins.conf, one repository per line; this file is
+# git-ignored, so a machine-specific checkout or a plugin repository you would
+# rather not name in the tracked manifest goes here.
+#
+#   URL              clone the default branch
+#   URL REF          check out REF (a tag or branch) instead
+#   /path/to/repo    a checkout on this machine, instead of a remote
+#
+# A checkout already present in plugins/ is used as it is; listing it here only
+# keeps it in the manifest, which is what makes Settings -> Updates report and
+# update it.
+#
+# Examples:
+#   https://github.com/Fruffel/dsh-llm-llamacpp.git
+#   https://github.com/Fruffel/dsh-llm-llamacpp.git v1.2.0
+#   /home/you/Documents/projects/dsh-llm-llamacpp
