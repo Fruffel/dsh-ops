@@ -41,8 +41,12 @@ fi
 "$OPS/bin/dsh-install-assets.sh"
 
 systemctl --user daemon-reload
-systemctl --user enable dsh-web.service dsh-go.service dsh-update.timer
-systemctl --user start dsh-update.timer dsh-go.service
+systemctl --user enable dsh-web.service dsh-go.service
+systemctl --user start dsh-go.service
+# dsh-update.timer is deliberately absent from these two lines: whether this
+# machine updates itself is DSH_AUTO_UPDATE in dsh-ops.conf, and
+# dsh-install-assets.sh above already applied it. Otherwise updates happen when
+# you press Update in the GUI (Settings -> Updates), or run bin/dsh-sync.sh.
 
 # Earlier versions wired the commands into the login shell; the service needs
 # none of that, so a re-run of this script takes it back out.
@@ -60,7 +64,7 @@ retire_shell_wiring() {
 retire_shell_wiring
 
 echo "install: done. Next: $OPS/bin/dsh-sync.sh --dry-run"
-echo "install: daily updates are already enabled (dsh-update.timer, 03:00)"
-echo "install: run one now with ./bin/dsh-sync.sh, or npm run update"
+echo "install: updates are on demand: GUI -> Settings -> Updates, or ./bin/dsh-sync.sh"
+echo "install: set DSH_AUTO_UPDATE=1 in $OPS/dsh-ops.conf for a nightly 03:00 sync"
 echo "install: reach this host by IP out of the box; add any hostname you type to"
 echo "install: DSH_TRUSTED_HOSTS in $OPS/dsh-ops.conf, then re-run this script"

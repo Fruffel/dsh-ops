@@ -62,3 +62,31 @@
 - insert:
     - id: dsh-ops-operator-surface
       name: ./dsh-ops-operator-surface/index.mjs
+
+# The updater: Settings -> Updates. The package behind it is its own repository,
+# cloned into plugins/ (see the README); this row and the script it calls are all
+# dsh-ops carries for it, and the install script warns when the package is
+# missing rather than letting the boot fail on an unresolvable row.
+#
+#    Its Host half runs bin/dsh-sync.sh --check --json to answer "is there
+#    something newer?" and starts dsh-update.service to install it; its Client
+#    half is the page that asks. The page reaches the Host half through ONE
+#    exact /api route
+#    (ctx.connection.fetch.register): the request is then served by the same
+#    Host/Origin fence and browser cookie as every other /api call, so a page
+#    that is not an authenticated page of this harness gets 401 and never
+#    reaches the updater. A bare webserver route would have had neither fence.
+#
+#    It discovers this checkout itself (the service's WorkingDirectory is
+#    <ops>/harness/current, and dsh-web.service names that path), so this row
+#    stays machine-independent. Add `config: { opsPath: /path/to/dsh-ops }` only
+#    if a deployment starts the harness in a way discovery cannot follow.
+#
+#    Update mode is a choice, not a default: DSH_AUTO_UPDATE in dsh-ops.conf
+#    decides whether dsh-update.timer runs nightly, and the Updates page toggles
+#    that same setting. Either way the work happens in dsh-update.service, whose
+#    own cgroup is what lets an update survive the restart it performs.
+- insert:
+    - id: dsh-ops-updater
+      name: ./dsh-ops-updater/index.mjs
+

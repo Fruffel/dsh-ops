@@ -5,4 +5,12 @@ Description=Sync DeepSeek Harness source to newest tag, build, deploy
 Type=oneshot
 WorkingDirectory=@@OPS@@
 Environment=PATH=%h/.local/share/pnpm/bin:%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=@@OPS@@/bin/dsh-sync.sh --channel rc
+# The channel is deliberately not fixed here: dsh-sync.sh reads
+# DSH_UPDATE_CHANNEL out of dsh-ops.conf, so the timer, the GUI's Update
+# button, and a terminal all run the same thing.
+#
+# This unit exists so that an update runs in its own cgroup. dsh-sync.sh
+# restarts dsh-web at the end; a child of dsh-web would be killed by that very
+# restart (systemd's default KillMode=control-group). The GUI starts exactly
+# this unit, which is why the daily timer is optional rather than required.
+ExecStart=@@OPS@@/bin/dsh-sync.sh

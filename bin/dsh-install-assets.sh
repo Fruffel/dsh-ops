@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Render this checkout into the machine-local dsh-ops assets:
 #   * systemd user units (WorkingDirectory/ExecStart point at THIS checkout)
-#   * the web profile layer: the operator-surface package plus the
-#     cordis.patch.yml that mounts it
+#   * the web profile layer: every plugin package under plugins/ (this repo's
+#     own, plus checkouts cloned there) and the cordis.patch.yml that mounts them
 #
 # Ownership rule: a file carrying the `dsh-ops:managed` marker is ours and is
 # refreshed in place (previous copy kept as *.bak). A file without the marker
@@ -26,7 +26,8 @@ DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 PROFILE_DIR="$DSH_HOME_DIR/profiles/web"
 PATCH_SRC="$OPS/harness/cordis.patch.web.yml"
 PATCH_DST="$PROFILE_DIR/cordis.patch.yml"
-PLUGIN_SRC="$OPS/plugins/dsh-ops-operator-surface"
+PLUGIN_DIR="$OPS/plugins"
+PLUGIN_SRC="$PLUGIN_DIR/dsh-ops-operator-surface"
 PLUGIN_DST="$PROFILE_DIR/dsh-ops-operator-surface"
 LEGACY_PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface.mjs"
 MARKER='dsh-ops:managed'
@@ -40,6 +41,8 @@ CONF="$OPS/dsh-ops.conf"
 DSH_PORT=3080
 DSH_GO_PORT=3081
 DSH_TRUSTED_HOSTS=""
+DSH_UPDATE_CHANNEL=rc
+DSH_AUTO_UPDATE=0
 if [ -f "$CONF" ]; then
   # shellcheck disable=SC1090 -- operator-owned file beside this checkout
   . "$CONF"
@@ -120,31 +123,62 @@ install_units() {
   done
 }
 
-# The profile layer: the operator-surface package (always ours) plus the patch
-# that mounts it. The plugin is a versioned package of its own because official
-# DeepSeek requests inventory every active Loader module, and a relative file
-# whose nearest named package.json has no version fails with REQUEST_EXTENSION.
-install_profile_layer() {
-  mkdir -p "$PROFILE_DIR" "$PLUGIN_DST"
-
-  plugin_changed=0
-  for file in package.json index.mjs; do
-    if [ -f "$PLUGIN_DST/$file" ] && cmp -s "$PLUGIN_SRC/$file" "$PLUGIN_DST/$file"; then
-      continue
-    fi
-    if [ "$DRY_RUN" = 1 ]; then
-      echo "+ install dsh-ops-operator-surface/$file"
-    else
-      cp -f "$PLUGIN_SRC/$file" "$PLUGIN_DST/$file"
-      echo "profile: installed dsh-ops-operator-surface/$file"
-    fi
-    plugin_changed=1
-    CHANGED=$((CHANGED + 1))
-  done
-  if [ "$plugin_changed" = 0 ]; then
-    echo "profile: operator-surface plugin already current"
+# Copy one file into the profile layer unless it is already identical. Files
+# carry no marker of their own, so ownership is decided by the package
+# directory: everything under a plugin package belongs to this repo.
+install_plugin_file() {
+  local src="$1" dst="$2"
+  if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+    return 1
   fi
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "+ install $3"
+  else
+    mkdir -p "$(dirname "$dst")"
+    cp -f "$src" "$dst"
+    echo "profile: installed $3"
+  fi
+  CHANGED=$((CHANGED + 1))
+  return 0
+}
 
+# Every plugin package under plugins/ is copied into the profile directory and
+# gets its own cordis.patch.yml row, which is what mounts it. Adding a provider
+# is therefore: write plugins/<name>/, add its row to harness/cordis.patch.web.yml,
+# re-run this script. The set of packages is discovered from the checkout — no
+# script change is needed for a new plugin.
+#
+# Each is a versioned package of its own because official DeepSeek requests
+# inventory every active Loader module, and a relative file whose nearest named
+# package.json has no version fails with REQUEST_EXTENSION.
+install_plugin_packages() {
+  local src name dst file changed relative
+  for src in "$PLUGIN_DIR"/*/; do
+    src="${src%/}"
+    [ -f "$src/package.json" ] || continue
+    name="$(basename "$src")"
+    dst="$PROFILE_DIR/$name"
+    changed=0
+    mkdir -p "$dst"
+    # Every file of the package travels, nested paths included, so a plugin can
+    # keep its modules in lib/ and its tests beside them.
+    while IFS= read -r file; do
+      relative="${file#"$src"/}"
+      if install_plugin_file "$file" "$dst/$relative" "$name/$relative"; then
+        changed=1
+      fi
+    done < <(find "$src" -type f -not -path '*/.git/*' -not -path '*/node_modules/*' | sort)
+    if [ "$changed" = 0 ]; then
+      echo "profile: plugin $name already current"
+    fi
+  done
+}
+
+# The profile layer: the plugin packages plus the patch that mounts them.
+install_profile_layer() {
+  mkdir -p "$PROFILE_DIR"
+
+  install_plugin_packages
   # A file is ours when it carries the marker. The legacy header is accepted
   # once, so the pre-marker layer this repo shipped upgrades in place; both are
   # backed up to .bak before the replacement lands. An operator-owned patch is
@@ -185,10 +219,63 @@ install_profile_layer() {
   fi
 }
 
+# A patch row names its package by path (`./<name>/index.mjs`). When that package
+# is not in this checkout, the harness cannot resolve the row and refuses to
+# boot — a late place to find out. A plugin kept in its own repository is
+# cloned into plugins/; re-run this script once it is there. Reported, not
+# enforced: an operator may be mid-install.
+check_plugin_packages() {
+  local name
+  [ -f "$PATCH_DST" ] || return 0
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    [ -d "$PLUGIN_DIR/$name" ] && continue
+    echo "profile: WARNING: $(basename "$PATCH_DST") mounts ./$name, which is not in $PLUGIN_DIR"
+    echo "profile:          clone that plugin into plugins/ (or drop its row) before dsh-web starts"
+  done < <(grep -oE 'name: \./[A-Za-z0-9._-]+/' "$PATCH_DST" 2>/dev/null | sed -e 's|name: \./||' -e 's|/$||' | sort -u || true)
+}
+
+# The daily timer is opt-in. DSH_AUTO_UPDATE=1 in dsh-ops.conf keeps the old
+# behavior (a nightly sync at 03:00); the default, 0, leaves the machine to be
+# updated from the GUI's Settings -> Updates page or by hand. The unit itself
+# stays installed and startable either way: the GUI starts exactly that unit,
+# because it runs the update in a cgroup that survives the dsh-web restart at
+# the end of it.
+apply_update_timer() {
+  local unit="dsh-update.timer" wanted verb
+  if [ "$DSH_AUTO_UPDATE" = 1 ]; then wanted="enabled"; verb="enable"; else wanted="disabled"; verb="disable"; fi
+  if ! command -v systemctl >/dev/null 2>&1 || ! systemctl --user show-environment >/dev/null 2>&1; then
+    echo "timer: no systemd user session here; left $unit alone (want $wanted)"
+    return 0
+  fi
+  local state
+  state="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  if [ "$state" = "$wanted" ]; then
+    echo "timer: $unit already $wanted"
+    return 0
+  fi
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "+ $verb $unit"
+    return 0
+  fi
+  if systemctl --user "$verb" --now "$unit" 2>/dev/null; then
+    echo "timer: $unit $wanted ($([ "$wanted" = enabled ] && echo 'daily 03:00' || echo 'updates are on demand'))"
+  else
+    echo "timer: could not $verb $unit (does the unit exist yet? re-run this script)"
+  fi
+}
+
 # Retire first: the harness must be able to take the address a retired unit held.
 retire_units
 install_units
 install_profile_layer
+check_plugin_packages
+# Directory the updater writes its progress into (harness/state/update.json and
+# update.log). Owned by the operator, not by this script: existing contents are
+# never touched.
+mkdir -p "$OPS/harness/state"
+apply_update_timer
 echo "assets: config $CONF (ports $DSH_PORT/$DSH_GO_PORT, trusted names: ${DSH_TRUSTED_HOSTS:-none})"
+echo "assets: updates channel=${DSH_UPDATE_CHANNEL:-rc} daily-timer=$([ "$DSH_AUTO_UPDATE" = 1 ] && echo on || echo off)"
 echo "assets: checkout $OPS -> $UNIT_DIR, $PROFILE_DIR (dry-run=$DRY_RUN)"
 echo "assets: changed=$CHANGED"

@@ -21,3 +21,14 @@ DSH_GO_PORT=3081
 #
 # Example: DSH_TRUSTED_HOSTS="dsh.example.com work-laptop.lan"
 DSH_TRUSTED_HOSTS=""
+
+# Which releases this machine follows: rc (default; newest tag, alpha excluded),
+# stable (plain x.y.z tags only), or latest (everything, alpha included).
+# Settings → Updates shows the newest release on this channel and installs it on
+# demand; this is also the channel the timer below and `bin/dsh-sync.sh` use.
+DSH_UPDATE_CHANNEL=rc
+
+# Whether the machine updates itself: 1 = dsh-update.timer runs daily at 03:00,
+# 0 = updates happen only when you press Update in Settings → Updates (or run
+# bin/dsh-sync.sh by hand). Default 0: the GUI is the primary control.
+DSH_AUTO_UPDATE=0

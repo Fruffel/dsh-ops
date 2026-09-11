@@ -4,6 +4,9 @@ harness/builds/
 harness/current
 harness/current-ref
 
+# The updater's progress record (update.json + update.log): machine-local.
+harness/state/
+
 # Per-machine deployment settings, copied from dsh-ops.conf.example.
 dsh-ops.conf
 
@@ -12,3 +15,4 @@ node_modules/
 
 # Local scratch (ssh helper, one-off probes): never committed.
 scratch/
+plugins/dsh-ops-updater/.git
