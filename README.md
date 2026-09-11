@@ -35,11 +35,16 @@ DSH_TRUSTED_HOSTS="dsh.example.com work-laptop.lan"
 * Settings, API keys and the Models page work from remote pages too, via one
   small plugin (`plugins/dsh-ops-operator-surface/`) that extends the client's
   privileged surface to the authorities you declared.
-* A plugin (`plugins/dsh-ops-updater/`, its own repository, cloned into
-  `plugins/`) adds **Settings → Updates**: what is installed, a *Check for
-  updates* button that asks the channel for its newest tag, and one that builds
-  and installs it. The build, the smoke test and the swap are the same script
-  the command line runs — a failure leaves the previous build running.
+* Plugins are installed, not committed: `plugins.conf` names plugin
+  repositories, `bin/dsh-plugins.sh` checks them out into a git-ignored
+  `plugins/`, and the profile layer mounts whatever is there. The harness itself
+  works the same way (`harness/upstream`, `harness/builds`).
+* One of those plugins (`dsh-ops-updater`) adds **Settings → Updates**: what is
+  installed, a *Check for updates* button that asks the channel for its newest
+  tag, one that builds and installs it, and a **Plugins** card that checks and
+  updates the plugin checkouts. The build, the smoke test and the swap are the
+  same script the command line runs — a failure leaves the previous build
+  running.
 * Updates happen when you ask for them. A nightly timer is available
   (`DSH_AUTO_UPDATE=1` in `dsh-ops.conf`, or the switch on that page) but off by
   default.
@@ -71,9 +76,30 @@ The page follows the run (phase, message, log) and the harness reconnects on its
 own when it comes back. A failure at any step keeps the running build exactly as
 it was.
 
-The update deliberately runs as `dsh-update.service` rather than as a child of
-the web server: it ends by restarting that server, and a child in the same
-cgroup would be killed by the restart it is performing.
+### Plugins
+
+Plugins are repositories too, so they get the same treatment one level down:
+
+```sh
+./bin/dsh-plugins.sh --install   # clone what plugins.conf declares (no updates)
+./bin/dsh-plugins.sh --check     # is any checkout behind its remote?
+./bin/dsh-plugins.sh --update    # fast-forward, refresh the layer, restart
+./bin/dsh-plugins.sh --list      # the manifest as this machine resolves it
+```
+
+`plugins.conf` (tracked) is the manifest — one repository per line, optionally
+pinned to a ref. `plugins.local.conf` (git-ignored) adds machine-local entries,
+so a checkout only this machine runs never becomes part of this repo. Both are
+read by the installer and by the GUI.
+
+A checkout with local changes is reported and left alone, an entry whose
+checkout has no `origin` is reported as unmanaged, and a run that changes
+nothing restarts nothing.
+
+Both update paths deliberately run as their own systemd unit
+(`dsh-update.service`, `dsh-plugins.service`) rather than as a child of the web
+server: each ends by restarting that server, and a child in the same cgroup
+would be killed by the restart it is performing.
 
 Anything the page can do is also a command:
 
@@ -91,7 +117,8 @@ thing — the npm scripts are just short names (pnpm works too).
 
 | npm run | Direct | What |
 | --- | --- | --- |
-| `update` | `./bin/dsh-sync.sh` | Update now (newest tag → build → smoke test → swap). Add `-- --check` to only report, `-- --dry-run`, `-- --channel stable`, `-- --ref <tag>` to pin |
+| `update` | `./bin/dsh-sync.sh` | Update the harness now (newest tag → build → smoke test → swap). Add `-- --check` to only report, `-- --dry-run`, `-- --channel stable`, `-- --ref <tag>` to pin |
+| `plugins` | `./bin/dsh-plugins.sh` | Plugins: `--install` (clone what the manifest declares), `--check`, `--update`, `--list` |
 | `url` | `./bin/dsh-url.sh` | Print the current login URLs for this host |
 | `logs` | `./bin/dsh-logs.sh` | Follow the services |
 | `check` | `./bin/dsh-check-gui.mjs` | Browser check: `npm run check -- http://<host>:3081/` |
@@ -105,7 +132,8 @@ that should look after itself.
 
 ## Configuration
 
-`dsh-ops.conf` (created by `install.sh`, git-ignored):
+`dsh-ops.conf` is this deployment's own settings (created by `install.sh`,
+git-ignored):
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -114,6 +142,18 @@ that should look after itself.
 | `DSH_TRUSTED_HOSTS` | empty | Names you reach this host by, space-separated |
 | `DSH_UPDATE_CHANNEL` | `rc` | Which releases to follow: `rc` (newest tag, alpha excluded), `stable` (plain `x.y.z`), `latest` (everything) |
 | `DSH_AUTO_UPDATE` | `0` | `1` runs `dsh-update.timer` daily at 03:00; `0` updates only when asked |
+
+`plugins.conf` (tracked) and `plugins.local.conf` (git-ignored) are the plugin
+manifest, and they carry no settings. A plugin is mounted by a generated row, so
+anything a deployment wants to pin — a `baseURL`, an extra authority — belongs in
+`harness/cordis.patch.local.yml` (git-ignored), which is appended after the
+generated rows and patches a row by id:
+
+```yaml
+- id: dsh-llm-llamacpp
+  config:
+    baseURL: http://desktop:8080/v1
+```
 
 ## If something is off
 
@@ -126,7 +166,8 @@ that should look after itself.
 | Nothing on `:3081` yet | It reads the token from the harness journal — give it a few seconds after a restart |
 | Turn fails with `REQUEST_EXTENSION` | The operator-surface plugin must be a versioned package; re-run `npm run assets` and restart `dsh-web` |
 | No **Updates** page under Settings | The plugin row mounts at boot, not on install: `systemctl --user restart dsh-web` once, then reload the page |
-| Boot fails on a row under `plugins/` | That package is missing: `npm run assets` warns when the patch mounts one that is not there. Clone the plugin into `plugins/` and re-run it |
+| A plugin is missing from the GUI | `./bin/dsh-plugins.sh --install` clones what `plugins.conf` declares, then re-run `npm run assets` |
+| A plugin update pulled but nothing changed | It refreshed the layer and restarted; `harness/state/plugins.log` has the detail. A run that changes nothing restarts nothing |
 | Updates page says the checkout was not found | Start the harness some other way? Name it on the row: `config: { opsPath: /path/to/dsh-ops }` in `~/.dsh/profiles/web/cordis.patch.yml`, then restart |
 | Update went wrong | The page shows the failure and the log; nothing was swapped. `npm run update -- --check`, then `npm run update -- --ref <previous-tag>`; the last good build kept running |
 
@@ -135,13 +176,16 @@ that should look after itself.
 | Path | What |
 | --- | --- |
 | `install.sh` / `uninstall.sh` | Bootstrap / remove a machine |
-| `bin/dsh-sync.sh` | The updater (`--check` to report, otherwise build → smoke test → swap, or keep last good) |
+| `bin/dsh-sync.sh` | The harness updater (`--check` to report, otherwise build → smoke test → swap, or keep last good) |
 | `bin/dsh-go.mjs` / `bin/dsh-url.sh` | The `:3081` entry / the URL helper |
 | `bin/dsh-check-gui.mjs` | Browser acceptance check |
-| `plugins/` | One directory per DSH plugin package: `dsh-ops-operator-surface` lives here; plugins kept in their own repositories are cloned into this directory (`dsh-ops-updater`) |
-| `harness/cordis.patch.web.yml` | The web profile layer that mounts them |
+| `plugins.conf` / `plugins.local.conf` | The plugin manifest: repository URLs this machine installs (the second file is git-ignored) |
+| `plugins/` | Git-ignored: the plugin checkouts themselves, cloned from the manifest |
+| `layer/` | This repo's own plugin packages, always installed because every deployment needs them (`dsh-ops-operator-surface`) |
+| `bin/dsh-plugins.sh` | The plugin installer/updater: install, check, update, list |
+| `harness/cordis.patch.web.yml` | The rows this repo always applies; the plugin rows are generated from what is installed, and `harness/cordis.patch.local.yml` (git-ignored) patches them per deployment |
 | `harness/state/` | Machine-local: the running (or last) update's progress record and log |
-| `systemd/` | `dsh-web`, `dsh-go`, and `dsh-update` + its optional daily timer |
+| `systemd/` | `dsh-web`, `dsh-go`, `dsh-update` + its optional daily timer, and `dsh-plugins` |
 | `dsh-ops.conf.example` | Config template |
 
 The longer reasoning — why `0.0.0.0` needs a profile-layer patch, what the two

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Render this checkout into the machine-local dsh-ops assets:
 #   * systemd user units (WorkingDirectory/ExecStart point at THIS checkout)
-#   * the web profile layer: every plugin package under plugins/ (this repo's
-#     own, plus checkouts cloned there) and the cordis.patch.yml that mounts them
+#   * the web profile layer: every plugin package (this repo's own under layer/,
+#     plus the checkouts under plugins/) and the generated cordis.patch.yml that
+#     mounts them
 #
 # Ownership rule: a file carrying the `dsh-ops:managed` marker is ours and is
 # refreshed in place (previous copy kept as *.bak). A file without the marker
@@ -26,9 +27,15 @@ DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 PROFILE_DIR="$DSH_HOME_DIR/profiles/web"
 PATCH_SRC="$OPS/harness/cordis.patch.web.yml"
 PATCH_DST="$PROFILE_DIR/cordis.patch.yml"
+LOCAL_PATCH="$OPS/harness/cordis.patch.local.yml"
+# Two sources of plugin packages, and the difference matters:
+#   layer/    dsh-ops' own packages, committed here because every deployment
+#             needs them (the remote-settings surface).
+#   plugins/  checkouts of the repositories named in plugins.conf and
+#             plugins.local.conf, installed by bin/dsh-plugins.sh. Git-ignored:
+#             the repositories stay the source of truth.
+LAYER_DIR="$OPS/layer"
 PLUGIN_DIR="$OPS/plugins"
-PLUGIN_SRC="$PLUGIN_DIR/dsh-ops-operator-surface"
-PLUGIN_DST="$PROFILE_DIR/dsh-ops-operator-surface"
 LEGACY_PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface.mjs"
 MARKER='dsh-ops:managed'
 DRY_RUN=0
@@ -142,18 +149,18 @@ install_plugin_file() {
   return 0
 }
 
-# Every plugin package under plugins/ is copied into the profile directory and
-# gets its own cordis.patch.yml row, which is what mounts it. Adding a provider
-# is therefore: write plugins/<name>/, add its row to harness/cordis.patch.web.yml,
-# re-run this script. The set of packages is discovered from the checkout — no
-# script change is needed for a new plugin.
+# Every plugin package — this repo's own under layer/, plus every checkout under
+# plugins/ — is copied into the profile directory, where the generated patch
+# mounts it. Installing a plugin is therefore one step: name its repository in
+# plugins.conf (or drop a package in layer/) and re-run this script. No row to
+# write, no script to edit, and no way to mount something that is not there.
 #
 # Each is a versioned package of its own because official DeepSeek requests
 # inventory every active Loader module, and a relative file whose nearest named
 # package.json has no version fails with REQUEST_EXTENSION.
 install_plugin_packages() {
   local src name dst file changed relative
-  for src in "$PLUGIN_DIR"/*/; do
+  for src in "$LAYER_DIR"/*/ "$PLUGIN_DIR"/*/; do
     src="${src%/}"
     [ -f "$src/package.json" ] || continue
     name="$(basename "$src")"
@@ -175,10 +182,34 @@ install_plugin_packages() {
 }
 
 # The profile layer: the plugin packages plus the patch that mounts them.
+render_profile_patch() {
+  local out="$1" file dir name main rows=0
+  cat "$PATCH_SRC" > "$out"
+  for file in "$LAYER_DIR"/*/package.json "$PLUGIN_DIR"/*/package.json; do
+    [ -f "$file" ] || continue
+    dir="$(dirname "$file")"
+    name="$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$file" | head -n 1)"
+    [ -n "$name" ] || name="$(basename "$dir")"
+    main="$(sed -n 's/.*"main"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$file" | head -n 1)"
+    [ -n "$main" ] || main="index.mjs"
+    printf '\n# %s\n- insert:\n    - id: %s\n      name: ./%s/%s\n' \
+      "$(basename "$dir")" "$name" "$(basename "$dir")" "$main" >> "$out"
+    rows=$((rows + 1))
+  done
+  if [ -f "$LOCAL_PATCH" ]; then
+    printf '\n# == %s (operator-owned)\n' "$(basename "$LOCAL_PATCH")" >> "$out"
+    cat "$LOCAL_PATCH" >> "$out"
+  fi
+  echo "$rows"
+}
+
 install_profile_layer() {
+  local rendered mount_rows
   mkdir -p "$PROFILE_DIR"
 
   install_plugin_packages
+  rendered="$(mktemp)"
+  mount_rows="$(render_profile_patch "$rendered")"
   # A file is ours when it carries the marker. The legacy header is accepted
   # once, so the pre-marker layer this repo shipped upgrades in place; both are
   # backed up to .bak before the replacement lands. An operator-owned patch is
@@ -186,10 +217,11 @@ install_profile_layer() {
   if [ -f "$PATCH_DST" ] && ! grep -qE "$MARKER|Managed by dsh-ops" "$PATCH_DST"; then
     echo "profile: KEPT $PATCH_DST (no '$MARKER' marker, so it is operator-owned)"
     echo "profile: to adopt the dsh-ops layer, move that file aside and re-run this script"
+    rm -f "$rendered"
     return 0
   fi
-  if [ -f "$PATCH_DST" ] && cmp -s "$PATCH_SRC" "$PATCH_DST"; then
-    echo "profile: cordis.patch.yml already current"
+  if [ -f "$PATCH_DST" ] && cmp -s "$rendered" "$PATCH_DST"; then
+    echo "profile: cordis.patch.yml already current ($mount_rows plugin row(s))"
   else
     if [ -f "$PATCH_DST" ]; then
       if [ "$DRY_RUN" = 1 ]; then
@@ -200,13 +232,15 @@ install_profile_layer() {
       fi
     fi
     if [ "$DRY_RUN" = 1 ]; then
-      echo "+ install cordis.patch.yml"
+      echo "+ install cordis.patch.yml ($mount_rows plugin row(s))"
     else
-      cp -f "$PATCH_SRC" "$PATCH_DST"
-      echo "profile: installed cordis.patch.yml"
+      cp -f "$rendered" "$PATCH_DST"
+      echo "profile: installed cordis.patch.yml ($mount_rows plugin row(s))"
     fi
     CHANGED=$((CHANGED + 1))
   fi
+
+  rm -f "$rendered"
 
   if [ -f "$LEGACY_PLUGIN" ]; then
     if [ "$DRY_RUN" = 1 ]; then
@@ -217,22 +251,6 @@ install_profile_layer() {
     fi
     CHANGED=$((CHANGED + 1))
   fi
-}
-
-# A patch row names its package by path (`./<name>/index.mjs`). When that package
-# is not in this checkout, the harness cannot resolve the row and refuses to
-# boot — a late place to find out. A plugin kept in its own repository is
-# cloned into plugins/; re-run this script once it is there. Reported, not
-# enforced: an operator may be mid-install.
-check_plugin_packages() {
-  local name
-  [ -f "$PATCH_DST" ] || return 0
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    [ -d "$PLUGIN_DIR/$name" ] && continue
-    echo "profile: WARNING: $(basename "$PATCH_DST") mounts ./$name, which is not in $PLUGIN_DIR"
-    echo "profile:          clone that plugin into plugins/ (or drop its row) before dsh-web starts"
-  done < <(grep -oE 'name: \./[A-Za-z0-9._-]+/' "$PATCH_DST" 2>/dev/null | sed -e 's|name: \./||' -e 's|/$||' | sort -u || true)
 }
 
 # The daily timer is opt-in. DSH_AUTO_UPDATE=1 in dsh-ops.conf keeps the old
@@ -265,11 +283,30 @@ apply_update_timer() {
   fi
 }
 
+# Make sure every plugin the manifest names is checked out. --install clones what
+# is missing and never touches an existing checkout, so it is safe on every
+# refresh; *updating* a checkout is a separate decision (bin/dsh-plugins.sh
+# --update, or the button in Settings -> Updates).
+install_plugins() {
+  if [ ! -x "$OPS/bin/dsh-plugins.sh" ]; then
+    echo "profile: no bin/dsh-plugins.sh; skipping plugin checkouts"
+    return 0
+  fi
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "+ install missing plugin checkouts (bin/dsh-plugins.sh --install)"
+    return 0
+  fi
+  # Nested: an --update run calls this script, and that call must not truncate
+  # the outer run's own log or progress record.
+  DSH_PLUGINS_NESTED=1 "$OPS/bin/dsh-plugins.sh" --install | sed 's/^/plugins: /'
+}
+
 # Retire first: the harness must be able to take the address a retired unit held.
 retire_units
 install_units
+# Checkouts first: the packages copied below are whatever the manifest installs.
+install_plugins
 install_profile_layer
-check_plugin_packages
 # Directory the updater writes its progress into (harness/state/update.json and
 # update.log). Owned by the operator, not by this script: existing contents are
 # never touched.

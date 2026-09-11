@@ -4,15 +4,26 @@ harness/builds/
 harness/current
 harness/current-ref
 
-# The updater's progress record (update.json + update.log): machine-local.
+# Progress records the updaters write (harness/state/update.json + update.log,
+# plugins.json + plugins.log): machine-local.
 harness/state/
+
+# The installed plugin checkouts, cloned from plugins.conf (and the machine-local
+# plugins.local.conf) by bin/dsh-plugins.sh. The repositories stay the source of
+# truth; this directory is disposable.
+plugins/
+plugins.local.conf
 
 # Per-machine deployment settings, copied from dsh-ops.conf.example.
 dsh-ops.conf
+
+# Operator-owned patch layer: appended to the generated cordis.patch.yml by
+# bin/dsh-install-assets.sh, for config that names this machine (an endpoint on
+# the LAN, a pinned port). Machine-specific by construction, so never committed.
+harness/cordis.patch.local.yml
 
 # Created only if someone runs npm/pnpm install here; the scripts need none.
 node_modules/
 
 # Local scratch (ssh helper, one-off probes): never committed.
 scratch/
-plugins/dsh-ops-updater/.git

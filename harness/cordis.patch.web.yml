@@ -50,43 +50,21 @@
   name: '@deepseek-ai/dsh-client-modules'
   inject: [webServer]
 
-# 4. The operator-surface plugin: pages served on a fence-trusted authority
-#    declare themselves the operator's own surface, so host-backed settings
-#    (Models, API keys, appearance) work over the tailnet instead of degrading
-#    to process-local memory. The plugin reads its authorities from the live
-#    webRuntime service; `./` is resolved relative to this patch file.
-#    It lives in its own package (name + version) rather than as a loose file
-#    next to the profile's package.json: official DeepSeek requests inventory
-#    every active Loader plugin, and a relative module whose nearest named
-#    manifest has no version fails the request with REQUEST_EXTENSION.
-- insert:
-    - id: dsh-ops-operator-surface
-      name: ./dsh-ops-operator-surface/index.mjs
-
-# The updater: Settings -> Updates. The package behind it is its own repository,
-# cloned into plugins/ (see the README); this row and the script it calls are all
-# dsh-ops carries for it, and the install script warns when the package is
-# missing rather than letting the boot fail on an unresolvable row.
+# Plugin rows are NOT written here. bin/dsh-install-assets.sh generates one
+# `- insert:` row per installed package — this repo's own under layer/, plus the
+# plugin repositories named in plugins.conf (and the machine-local
+# plugins.local.conf), which bin/dsh-plugins.sh checks out into plugins/.
 #
-#    Its Host half runs bin/dsh-sync.sh --check --json to answer "is there
-#    something newer?" and starts dsh-update.service to install it; its Client
-#    half is the page that asks. The page reaches the Host half through ONE
-#    exact /api route
-#    (ctx.connection.fetch.register): the request is then served by the same
-#    Host/Origin fence and browser cookie as every other /api call, so a page
-#    that is not an authenticated page of this harness gets 401 and never
-#    reaches the updater. A bare webserver route would have had neither fence.
+#   * adding a plugin is a line in plugins.conf, not an edit here;
+#   * a package names itself: `name` in its package.json becomes the row id and
+#     `main` its entry file, so a plugin repository needs nothing from dsh-ops;
+#   * nothing can be mounted that is not installed, because the rows come from
+#     what is on disk.
 #
-#    It discovers this checkout itself (the service's WorkingDirectory is
-#    <ops>/harness/current, and dsh-web.service names that path), so this row
-#    stays machine-independent. Add `config: { opsPath: /path/to/dsh-ops }` only
-#    if a deployment starts the harness in a way discovery cannot follow.
+# Per-deployment tweaks to those rows (a pinned baseURL, an extra authority)
+# belong in harness/cordis.patch.local.yml, which is appended after them and is
+# git-ignored. It patches a row by id, e.g.
 #
-#    Update mode is a choice, not a default: DSH_AUTO_UPDATE in dsh-ops.conf
-#    decides whether dsh-update.timer runs nightly, and the Updates page toggles
-#    that same setting. Either way the work happens in dsh-update.service, whose
-#    own cgroup is what lets an update survive the restart it performs.
-- insert:
-    - id: dsh-ops-updater
-      name: ./dsh-ops-updater/index.mjs
-
+#   - id: dsh-llm-llamacpp
+#     config:
+#       baseURL: http://desktop:8080/v1

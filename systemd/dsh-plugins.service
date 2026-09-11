@@ -1,0 +1,14 @@
+[Unit]
+Description=Update the dsh-ops plugin checkouts and refresh the profile layer
+
+[Service]
+Type=oneshot
+WorkingDirectory=@@OPS@@
+Environment=PATH=%h/.local/share/pnpm/bin:%h/.local/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# The plugin counterpart of dsh-update.service, and for the same reason: an
+# update ends by restarting dsh-web, so it has to run in its own cgroup — a
+# child of dsh-web would be killed by the very restart it performs.
+#
+# The GUI starts exactly this unit from Settings -> Updates (its Plugins card);
+# a terminal runs the same thing as bin/dsh-plugins.sh --update.
+ExecStart=@@OPS@@/bin/dsh-plugins.sh --update

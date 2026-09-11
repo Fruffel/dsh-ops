@@ -152,11 +152,10 @@ The daily timer (`dsh-update.timer`, 03:00, `Persistent=true`) is opt-in:
 later updates instead of being silently reverted. The unit itself is always
 installed and startable; only the timer is enabled or disabled.
 
-**The page is a plugin of its own** (`dsh-ops-updater`, cloned into `plugins/`;
-this repo carries only its row in the patch and warns when the package is
-missing). Its Host half reaches the browser through ONE exact `/api` route,
-which is dispatched by the same code as `/api` — so the Host/Origin fence and
-the signed browser cookie are applied before the handler runs, which a bare
+**The page is a plugin of its own** (`dsh-ops-updater`, installed from the
+manifest below). Its Host half reaches the browser through ONE exact `/api`
+route, which is dispatched by the same code as `/api` — so the Host/Origin fence
+and the signed browser cookie are applied before the handler runs, which a bare
 `ctx.webServer` route would not have. The plugin's own README carries the rest:
 endpoints, discovery, tests.
 
@@ -171,3 +170,43 @@ Expect a short restart (~5-15 s) when something actually changed; a session
 running at that moment is interrupted, and the page reconnects. Channels: `rc`
 (default, skips alpha), `stable` (plain `x.y.z` tags only), `latest`
 (everything).
+
+## Plugins are installed, not vendored
+
+The harness and the plugins are both "code from somewhere else", so they get one
+treatment: the repository holds the recipe, a git-ignored directory holds the
+code.
+
+* **harness** — `bin/dsh-sync.sh` resolves the newest tag, builds it under
+  `harness/builds/<tag>`, smoke-tests it, and only then points `harness/current`
+  at it. `harness/upstream` is a clone, `harness/builds` is worktrees; neither is
+  in the repository.
+* **plugins** — `plugins.conf` (plus the machine-local `plugins.local.conf`)
+  names repositories; `bin/dsh-plugins.sh` clones them into `plugins/`. No
+  plugin's code is in this repository.
+
+Three consequences worth knowing:
+
+1. **Mount rows are generated, not written.** `bin/dsh-install-assets.sh`
+   renders the profile patch from what is installed: a package's own
+   `package.json` names it (`name` becomes the row id, `main` the entry file), so
+   adding a plugin is one line in a manifest and a plugin repository needs
+   nothing from dsh-ops. It also removes a failure mode: static rows were a
+   standing invitation to a fresh clone that mounts a package nobody installed.
+2. **Per-deployment config has one place to go**:
+   `harness/cordis.patch.local.yml`, appended after the generated rows, patching
+   a row by id. Git-ignored, like `dsh-ops.conf`, so a pin never becomes part of
+   the repo.
+3. **`layer/` is the deliberate exception.** `dsh-ops-operator-surface` is needed
+   by every deployment reached by name — without it a remote page reports
+   "settings are unavailable in this browser" — so it ships in this repository
+   and is always installed, rather than arriving through a manifest a fresh
+   clone may not have run yet.
+
+Updating plugins is its own unit (`dsh-plugins.service`) for the reason
+`dsh-update.service` exists: the run ends by restarting `dsh-web`, and a child of
+`dsh-web` would be killed by that restart. The modes are deliberately split —
+`--check` only asks remotes (`git ls-remote`, no fetch), `--update`
+fast-forwards and leaves a checkout with local changes alone, and a run that
+changes nothing restarts nothing — so the button in the GUI, the timer and a
+terminal all behave the same way.
