@@ -31,9 +31,9 @@ LOCAL_PATCH="$OPS/harness/cordis.patch.local.yml"
 # Two sources of plugin packages, and the difference matters:
 #   layer/    dsh-ops' own packages, committed here because every deployment
 #             needs them (the remote-settings surface).
-#   plugins/  checkouts of the repositories named in the machine-local
-#             plugins.conf, installed by bin/dsh-plugins.sh. Git-ignored: the
-#             repositories stay the source of truth.
+#   plugins/  checkouts of the repositories named in plugins.conf and
+#             plugins.local.conf, installed by bin/dsh-plugins.sh. Git-ignored:
+#             the repositories stay the source of truth.
 LAYER_DIR="$OPS/layer"
 PLUGIN_DIR="$OPS/plugins"
 LEGACY_PLUGIN="$PROFILE_DIR/dsh-ops-operator-surface.mjs"

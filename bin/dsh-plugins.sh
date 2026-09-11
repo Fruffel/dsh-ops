@@ -2,10 +2,11 @@
 # Install and update this deployment's plugins.
 #
 # dsh-ops carries a manifest, not plugin code: plugins.conf lists plugin
-# repositories, and this script clones each one into plugins/ (both git-ignored)
-# which is what the profile layer mounts. The harness gets exactly the same
-# treatment from bin/dsh-sync.sh: the repository holds the recipe, the checkout
-# holds the code. The tracked template is plugins.conf.example.
+# repositories (plugins.local.conf, git-ignored, adds machine-local checkouts),
+# and this script clones each one into plugins/ — also git-ignored — which is
+# what the profile layer mounts. The harness gets exactly the same treatment
+# from bin/dsh-sync.sh: the repository holds the recipe, the checkout holds the
+# code.
 #
 # Modes:
 #   --install   clone what is missing. Never touches an existing checkout, so
@@ -29,6 +30,7 @@ fi
 OPS="$(cd "$(dirname "$SELF")/.." && pwd)"
 PLUGIN_DIR="$OPS/plugins"
 CONF="$OPS/plugins.conf"
+LOCAL_CONF="$OPS/plugins.local.conf"
 STATE_DIR="$OPS/harness/state"
 STATUS="$STATE_DIR/plugins.json"
 LOG_FILE="$STATE_DIR/plugins.log"
@@ -130,10 +132,12 @@ entry_name() {
 # Every manifest entry as "<url>|<ref>|<name>|<source>", in file order.
 # The separator is "|" rather than a tab on purpose: a tab is IFS whitespace, so
 # `read` collapses consecutive ones and an absent ref would shift every field.
+# Later files win a name collision (plugins.local.conf overrides plugins.conf),
+# so a machine can point an entry at its own checkout.
 manifest_entries() {
-  local file="$CONF" line url ref name seen=""
-  {
-    [ -f "$file" ] || return 0
+  local file line url ref name seen=""
+  for file in "$CONF" "$LOCAL_CONF"; do
+    [ -f "$file" ] || continue
     while IFS= read -r line || [ -n "$line" ]; do
       line="${line%%#*}"
       line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -151,7 +155,7 @@ manifest_entries() {
       seen="$seen $name"
       printf '%s|%s|%s|%s\n' "$url" "$ref" "$name" "$(basename "$file")"
     done < "$file"
-  }
+  done
 }
 
 # Whether a checkout has an origin to compare with and pull from.
@@ -191,8 +195,8 @@ entry_json() {
 
 # ---- --list ---------------------------------------------------------------
 if [ "$MODE" = list ]; then
-  if [ ! -f "$CONF" ]; then
-    echo "dsh-plugins: no manifest ($CONF); install.sh writes one from $(basename "$CONF").example"
+  if [ ! -f "$CONF" ] && [ ! -f "$LOCAL_CONF" ]; then
+    echo "dsh-plugins: no manifest ($CONF)"
     exit 0
   fi
   while IFS='|' read -r url ref name source; do
@@ -249,7 +253,7 @@ if [ "$MODE" = check ]; then
     printf '  "checkedAt": %s\n' "$(json_string "$(now_iso)")"
     printf '}\n'
   else
-    printf 'dsh-plugins: %s, manifest %s\n' "$PLUGIN_DIR" "$CONF"
+    printf 'dsh-plugins: %s, manifest %s%s\n' "$PLUGIN_DIR" "$CONF" "$([ -f "$LOCAL_CONF" ] && printf ' + %s' "$LOCAL_CONF")"
     if [ -z "$ENTRIES_JSON" ]; then
       printf 'dsh-plugins: no plugins declared\n'
     else

@@ -37,12 +37,12 @@ if [ ! -f "$OPS/dsh-ops.conf" ]; then
   echo "install:          this host by NAME; by IP everything already works"
 fi
 
-# The plugin manifest, created once and then owned by the operator (git-ignored,
-# like dsh-ops.conf). Its template carries the updater, which is what gives a
-# fresh clone a way to install anything else from the GUI.
-if [ ! -f "$OPS/plugins.conf" ]; then
-  cp "$OPS/plugins.conf.example" "$OPS/plugins.conf"
-  echo "install: wrote $OPS/plugins.conf — list this machine's plugin repositories there"
+# The machine-local plugin manifest, created once and then owned by the
+# operator (git-ignored). The tracked plugins.conf names only the updater, which
+# is what a bare clone needs; everything this machine runs lives here.
+if [ ! -f "$OPS/plugins.local.conf" ]; then
+  cp "$OPS/plugins.local.conf.example" "$OPS/plugins.local.conf"
+  echo "install: wrote $OPS/plugins.local.conf — list this machine's plugin repositories there"
 fi
 
 # Units (rendered with this checkout's path and dsh-ops.conf) + profile layer.

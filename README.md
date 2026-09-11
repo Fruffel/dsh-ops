@@ -87,15 +87,18 @@ Plugins are repositories too, so they get the same treatment one level down:
 ./bin/dsh-plugins.sh --list      # the manifest as this machine resolves it
 ```
 
-One machine-local manifest, `plugins.conf` — one repository or local path per
-line, optionally pinned to a ref — seeded by `install.sh` from the tracked
-`plugins.conf.example`, the same pattern as `dsh-ops.conf`. The template's one
-non-negotiable entry is the updater: that is what gives a fresh clone a way to
-install anything else from the GUI.
+There are two manifests, and the split is the point:
 
-It is machine-local so that neither plugin code nor the set of plugins a
-particular deployment runs is ever part of this repository. Every entry clones
-into the git-ignored `plugins/`.
+* **`plugins.conf`** (tracked) names exactly one repository: the updater. It is
+  what gives a bare clone a way to install anything else from the GUI. Plugin
+  code never belongs in this repository, and neither do the plugins a particular
+  deployment happens to run, so nothing else goes here.
+* **`plugins.local.conf`** (git-ignored, created from
+  `plugins.local.conf.example` by `install.sh`) is where every other entry
+  lives — one repository or local path per line, optionally pinned to a ref.
+
+Both are read by the installer and by the GUI, and both clone into the
+git-ignored `plugins/`.
 
 A checkout with local changes is reported and left alone, an entry whose
 checkout has no `origin` is reported as unmanaged, and a run that changes
@@ -148,10 +151,10 @@ git-ignored):
 | `DSH_UPDATE_CHANNEL` | `rc` | Which releases to follow: `rc` (newest tag, alpha excluded), `stable` (plain `x.y.z`), `latest` (everything) |
 | `DSH_AUTO_UPDATE` | `0` | `1` runs `dsh-update.timer` daily at 03:00; `0` updates only when asked |
 
-`plugins.conf` (machine-local, git-ignored) is the plugin manifest and carries
-no settings. A plugin is mounted by a generated row, so anything a deployment
-wants to pin — a `baseURL`, an extra authority — belongs in
-`harness/cordis.patch.local.yml` (also git-ignored), which is appended after the
+`plugins.conf` (tracked) and `plugins.local.conf` (git-ignored) are the plugin
+manifest, and they carry no settings. A plugin is mounted by a generated row, so
+anything a deployment wants to pin — a `baseURL`, an extra authority — belongs in
+`harness/cordis.patch.local.yml` (git-ignored), which is appended after the
 generated rows and patches a row by id:
 
 ```yaml
@@ -172,7 +175,6 @@ generated rows and patches a row by id:
 | Turn fails with `REQUEST_EXTENSION` | The operator-surface plugin must be a versioned package; re-run `npm run assets` and restart `dsh-web` |
 | No **Updates** page under Settings | The plugin row mounts at boot, not on install: `systemctl --user restart dsh-web` once, then reload the page |
 | A plugin is missing from the GUI | `./bin/dsh-plugins.sh --install` clones what `plugins.conf` declares, then re-run `npm run assets` |
-| No `plugins.conf` on a fresh clone | `install.sh` writes it from `plugins.conf.example`; running only `npm run assets` installs nothing but this repo's own `layer/` packages |
 | A plugin update pulled but nothing changed | It refreshed the layer and restarted; `harness/state/plugins.log` has the detail. A run that changes nothing restarts nothing |
 | Updates page says the checkout was not found | Start the harness some other way? Name it on the row: `config: { opsPath: /path/to/dsh-ops }` in `~/.dsh/profiles/web/cordis.patch.yml`, then restart |
 | Update went wrong | The page shows the failure and the log; nothing was swapped. `npm run update -- --check`, then `npm run update -- --ref <previous-tag>`; the last good build kept running |
@@ -185,7 +187,8 @@ generated rows and patches a row by id:
 | `bin/dsh-sync.sh` | The harness updater (`--check` to report, otherwise build → smoke test → swap, or keep last good) |
 | `bin/dsh-go.mjs` / `bin/dsh-url.sh` | The `:3081` entry / the URL helper |
 | `bin/dsh-check-gui.mjs` | Browser acceptance check |
-| `plugins.conf` / `.example` | This machine's plugin repositories (git-ignored, created by `install.sh`); the template names the bootstrap updater |
+| `plugins.conf` | The one plugin this repo names: the updater. Every other entry belongs in the machine-local file |
+| `plugins.local.conf` / `.example` | This machine's plugin repositories (git-ignored, created by `install.sh`) |
 | `plugins/` | Git-ignored: the plugin checkouts themselves, cloned from the manifest |
 | `layer/` | This repo's own plugin packages, always installed because every deployment needs them (`dsh-ops-operator-surface`) |
 | `bin/dsh-plugins.sh` | The plugin installer/updater: install, check, update, list |
